@@ -1,10 +1,12 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 
-// Modelo
+// Modelo y Provider
 import 'models/evento.dart';
+import 'providers/event_provider.dart';
 
 // Pantallas
 import 'screens/home_screen.dart';
@@ -35,11 +37,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Agenda Dinámica',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      home: const FirebaseLoadingScreen(),
+    return MultiProvider(
+      providers: [ChangeNotifierProvider(create: (_) => EventProvider())],
+      child: MaterialApp(
+        title: 'Agenda Dinámica',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+        home: const FirebaseLoadingScreen(),
+      ),
     );
   }
 }
@@ -72,6 +77,11 @@ class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
           _isFirebaseReady = true;
           _statusMessage = 'Conectado exitosamente';
         });
+
+        // Cargar eventos desde Firebase
+        if (mounted) {
+          await context.read<EventProvider>().loadEvents();
+        }
 
         // Esperar un poco antes de navegar
         await Future.delayed(const Duration(seconds: 1));
@@ -145,9 +155,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  /// Lista en memoria de eventos
-  final List<Evento> _eventos = [];
-
   @override
   void initState() {
     super.initState();
@@ -165,72 +172,218 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  // CRUD local
-  void _addEvento(Evento evento) {
-    setState(() {
-      _eventos.add(evento);
-      _eventos.sort((a, b) => a.fecha.compareTo(b.fecha));
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Evento creado')));
+  // Métodos para manejar eventos con Firebase
+  Future<void> _addEvento(Evento evento) async {
+    try {
+      await context.read<EventProvider>().addEvent(evento);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Evento creado exitosamente'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('Error al crear evento: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
   }
 
-  void _editEvento(int index, Evento eventoEditado) {
-    if (index < 0 || index >= _eventos.length) return;
-    setState(() {
-      _eventos[index] = eventoEditado;
-      _eventos.sort((a, b) => a.fecha.compareTo(b.fecha));
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Evento actualizado')));
+  Future<void> _editEvento(int index, Evento eventoEditado) async {
+    try {
+      final eventProvider = context.read<EventProvider>();
+      final oldEventId = eventProvider.events[index].id;
+      await eventProvider.updateEvent(oldEventId, eventoEditado);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Evento actualizado exitosamente'),
+              ],
+            ),
+            backgroundColor: Colors.blue,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('Error al actualizar evento: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
   }
 
-  void _deleteEvento(int index) {
-    if (index < 0 || index >= _eventos.length) return;
-    final removed = _eventos[index];
-    setState(() {
-      _eventos.removeAt(index);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Evento eliminado: ${removed.titulo}')),
-    );
+  Future<void> _deleteEvento(int index) async {
+    try {
+      final eventProvider = context.read<EventProvider>();
+      final eventoId = eventProvider.events[index].id;
+      final eventoTitulo = eventProvider.events[index].titulo;
+
+      await eventProvider.deleteEvent(eventoId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Evento eliminado: $eventoTitulo'),
+              ],
+            ),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('Error al eliminar evento: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
   }
 
-  // Páginas (usamos getter para que capture el estado actual y callbacks)
-  List<Widget> get _pages => [
-    // Aquí pasamos la lista dinámica y el callback para ir a 'Eventos'
-    HomeScreen(
-      eventos: _eventos,
-      onGoToEvents: () => setState(() => _selectedIndex = 2),
-    ),
+  // Páginas usando Consumer para obtener eventos de Firebase
+  List<Widget> _buildPages() {
+    return [
+      // Home Screen
+      Consumer<EventProvider>(
+        builder: (context, eventProvider, child) {
+          return HomeScreen(
+            eventos: eventProvider.events,
+            onGoToEvents: () => setState(() => _selectedIndex = 2),
+          );
+        },
+      ),
 
-    CalendarScreen(
-      eventos: _eventos,
-      onAddEvento: _addEvento,
-      onEditEvento: (index, evento) => _editEvento(index, evento),
-      onDeleteEvento: (index) => _deleteEvento(index),
-      onGoToEvents: () => setState(() => _selectedIndex = 2),
-    ),
+      // Calendar Screen
+      Consumer<EventProvider>(
+        builder: (context, eventProvider, child) {
+          return CalendarScreen(
+            eventos: eventProvider.events,
+            onAddEvento: _addEvento,
+            onEditEvento: _editEvento,
+            onDeleteEvento: _deleteEvento,
+            onGoToEvents: () => setState(() => _selectedIndex = 2),
+          );
+        },
+      ),
 
-    EventsScreen(
-      eventos: _eventos,
-      onAddEvento: _addEvento,
-      onEditEvento: (index, evento) => _editEvento(index, evento),
-      onDeleteEvento: (index) => _deleteEvento(index),
-    ),
+      // Events Screen
+      Consumer<EventProvider>(
+        builder: (context, eventProvider, child) {
+          return EventsScreen(
+            eventos: eventProvider.events,
+            onAddEvento: _addEvento,
+            onEditEvento: _editEvento,
+            onDeleteEvento: _deleteEvento,
+          );
+        },
+      ),
 
-    const WorldScreen(),
-    const SettingsScreen(),
-  ];
+      const WorldScreen(),
+      const SettingsScreen(),
+    ];
+  }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _pages),
+      body: Consumer<EventProvider>(
+        builder: (context, eventProvider, child) {
+          // Mostrar loading mientras se cargan los eventos
+          if (eventProvider.isLoading && eventProvider.events.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Cargando eventos...',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return IndexedStack(index: _selectedIndex, children: _buildPages());
+        },
+      ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
