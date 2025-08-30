@@ -1,4 +1,5 @@
 // lib/providers/event_provider.dart
+import 'dart:async'; // ✨ NUEVO: Importar para StreamSubscription
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/evento.dart';
@@ -10,6 +11,9 @@ class EventProvider with ChangeNotifier {
   List<Evento> _events = [];
   bool _isLoading = false;
   String? _errorMessage;
+
+  // ✨ NUEVO: Variable para controlar la suscripción en tiempo real
+  StreamSubscription<QuerySnapshot>? _eventsSubscription;
 
   // Getters
   List<Evento> get events => List.unmodifiable(_events);
@@ -162,18 +166,50 @@ class EventProvider with ChangeNotifier {
         );
   }
 
-  // Escuchar cambios en tiempo real
+  // ✨ MEJORADO: Escuchar cambios en tiempo real con control de suscripción
   void listenToEvents() {
-    eventsStream.listen(
-      (eventos) {
-        _events = eventos;
-        notifyListeners();
-      },
-      onError: (error) {
-        _errorMessage = 'Error al escuchar eventos: $error';
-        notifyListeners();
-      },
-    );
+    try {
+      // Cancelar suscripción anterior si existe
+      _eventsSubscription?.cancel();
+
+      // Crear nueva suscripción
+      _eventsSubscription = _eventsCollection
+          .orderBy('fecha', descending: false)
+          .snapshots()
+          .listen(
+            (snapshot) {
+              _events = snapshot.docs
+                  .map((doc) => Evento.fromSnapshot(doc))
+                  .toList();
+              notifyListeners();
+              print(
+                '🔥 Eventos actualizados en tiempo real: ${_events.length}',
+              );
+            },
+            onError: (error) {
+              _errorMessage = 'Error al escuchar eventos: $error';
+              notifyListeners();
+              print('❌ Error en tiempo real: $error');
+            },
+          );
+
+      print('🎧 Escucha de eventos en tiempo real iniciada');
+    } catch (e) {
+      print('❌ Error al iniciar escucha: $e');
+      _errorMessage = 'Error al iniciar sincronización: $e';
+      notifyListeners();
+    }
+  }
+
+  // ✨ NUEVO: Detener la escucha en tiempo real
+  void stopListening() {
+    try {
+      _eventsSubscription?.cancel();
+      _eventsSubscription = null;
+      print('🔇 Escucha de eventos detenida');
+    } catch (e) {
+      print('❌ Error al detener escucha: $e');
+    }
   }
 
   // Limpiar errores
@@ -182,31 +218,11 @@ class EventProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Método para testing - NO USAR EN PRODUCCIÓN
-  Future<void> loadDummyEvents() async {
-    final dummyEvents = [
-      Evento(
-        id: '',
-        titulo: 'Reunión de proyecto',
-        descripcion: 'Revisión semanal del progreso',
-        fecha: DateTime.now(),
-      ),
-      Evento(
-        id: '',
-        titulo: 'Examen de Matemáticas',
-        descripcion: 'Capítulo 5 y 6',
-        fecha: DateTime.now().add(const Duration(days: 1)),
-      ),
-      Evento(
-        id: '',
-        titulo: 'Tarea de Historia',
-        descripcion: 'Investigar la Revolución Francesa',
-        fecha: DateTime.now().add(const Duration(days: 2)),
-      ),
-    ];
-
-    for (var evento in dummyEvents) {
-      await addEvent(evento);
-    }
+  // ✨ NUEVO: Sobrescribir dispose para limpiar recursos
+  @override
+  void dispose() {
+    print('🧹 Limpiando EventProvider...');
+    stopListening();
+    super.dispose();
   }
 }

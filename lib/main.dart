@@ -159,6 +159,11 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _checkFirebaseStatus();
+    // 🔥 NUEVA FUNCIONALIDAD: Sincronización en tiempo real
+    // Esto hará que los eventos se actualicen automáticamente cuando otros usuarios los modifiquen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<EventProvider>().listenToEvents();
+    });
   }
 
   void _checkFirebaseStatus() {
@@ -308,6 +313,14 @@ class _MainScreenState extends State<MainScreen> {
         );
       }
     }
+  }
+
+  // Limpiar recursos cuando se destruya el widget
+  @override
+  void dispose() {
+    // Detener la escucha de eventos de Firebase
+    context.read<EventProvider>().stopListening();
+    super.dispose();
   }
 
   // Páginas usando Consumer para obtener eventos de Firebase
