@@ -2,9 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-import 'auth/auth_wrapper_simple.dart';
+
+// Servicio de notificaciones
+import 'services/notification_service.dart';
 
 // Modelo y Provider
 import 'models/evento.dart';
@@ -26,9 +27,13 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    print('Firebase inicializado correctamente');
+    print('✅ Firebase inicializado correctamente');
+
+    // 🔔 Inicializar servicio de notificaciones
+    await NotificationService.initialize();
+    print('✅ Servicio de notificaciones inicializado');
   } catch (e) {
-    print('Error al inicializar Firebase: $e');
+    print('❌ Error al inicializar Firebase: $e');
   }
 
   runApp(const MyApp());
@@ -40,12 +45,16 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => EventProvider())],
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => EventProvider()..listenToUserChanges(),
+        ),
+      ],
       child: MaterialApp(
         title: 'Agenda Dinámica',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-        home: const AuthWrapperSimple(),
+        home: const FirebaseLoadingScreen(),
       ),
     );
   }
@@ -155,81 +164,56 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  String? _userName;
-  String? _userInitial;
   int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
-
-    // Obtener nombre e inicial del usuario
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      _userName = user.displayName ?? user.email?.split('@').first;
-      _userInitial = _userName != null && _userName!.isNotEmpty
-          ? _userName![0].toUpperCase()
-          : null;
-    }
-
     _checkFirebaseStatus();
-    // Escuchar cambios de usuario y reiniciar la suscripción de eventos
+
+    // 🔥 NUEVA FUNCIONALIDAD: Sincronización en tiempo real automática
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<EventProvider>().listenToUserChanges();
+      final eventProvider = context.read<EventProvider>();
+      eventProvider.listenToEvents();
+
+      // 🔔 Verificar notificaciones pendientes periódicamente
+      _startNotificationChecker();
     });
   }
 
   void _checkFirebaseStatus() {
     if (Firebase.apps.isNotEmpty) {
-      print('Firebase Apps disponibles: ${Firebase.apps.length}');
+      print('✅ Firebase Apps disponibles: ${Firebase.apps.length}');
       for (var app in Firebase.apps) {
-        print('App: ${app.name}, Options: ${app.options.projectId}');
+        print('📱 App: ${app.name}, Project: ${app.options.projectId}');
       }
     } else {
-      print('No hay apps de Firebase inicializadas');
+      print('⚠️ No hay apps de Firebase inicializadas');
     }
   }
 
-  // Métodos para manejar eventos con Firebase
+  // 🔔 Verificador periódico de notificaciones
+  void _startNotificationChecker() {
+    // Verificar cada 5 minutos si hay notificaciones pendientes
+    Stream.periodic(const Duration(minutes: 5)).listen((_) async {
+      final eventProvider = context.read<EventProvider>();
+      await eventProvider.verificarNotificacionesPendientes();
+    });
+  }
+
+  // ✨ MÉTODOS ACTUALIZADOS para usar el nuevo EventProvider
+
   Future<void> _addEvento(Evento evento) async {
     try {
+      // El nuevo EventProvider ya maneja las notificaciones internamente
       await context.read<EventProvider>().addEvent(evento);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Evento creado exitosamente'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        _showSuccessSnackBar('Evento creado exitosamente');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error, color: Colors.white),
-                SizedBox(width: 8),
-                Expanded(child: Text('Error al crear evento: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        _showErrorSnackBar('Error al crear evento: $e');
       }
     }
   }
@@ -238,44 +222,16 @@ class _MainScreenState extends State<MainScreen> {
     try {
       final eventProvider = context.read<EventProvider>();
       final oldEventId = eventProvider.events[index].id;
+
+      // El nuevo EventProvider ya reprograma las notificaciones automáticamente
       await eventProvider.updateEvent(oldEventId, eventoEditado);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Evento actualizado exitosamente'),
-              ],
-            ),
-            backgroundColor: Colors.blue,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        _showSuccessSnackBar('Evento actualizado exitosamente');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error, color: Colors.white),
-                SizedBox(width: 8),
-                Expanded(child: Text('Error al actualizar evento: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        _showErrorSnackBar('Error al actualizar evento: $e');
       }
     }
   }
@@ -283,65 +239,111 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _deleteEvento(int index) async {
     try {
       final eventProvider = context.read<EventProvider>();
-      final eventoId = eventProvider.events[index].id;
-      final eventoTitulo = eventProvider.events[index].titulo;
+      final evento = eventProvider.events[index];
+      final eventoTitulo = evento.titulo;
 
-      await eventProvider.deleteEvent(eventoId);
+      // El nuevo EventProvider ya cancela las notificaciones automáticamente
+      await eventProvider.deleteEvent(evento.id);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Evento eliminado: $eventoTitulo'),
-              ],
-            ),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        _showSuccessSnackBar('Evento eliminado: $eventoTitulo');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar('Error al eliminar evento: $e');
+      }
+    }
+  }
+
+  // 🔔 NUEVAS FUNCIONES para gestión avanzada de notificaciones
+  Future<void> _toggleEventNotification(String eventoId) async {
+    try {
+      await context.read<EventProvider>().toggleNotificacion(eventoId);
+
+      if (mounted) {
+        _showSuccessSnackBar('Configuración de notificación actualizada');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar('Error al cambiar notificación: $e');
+      }
+    }
+  }
+
+  Future<void> _updateNotificationTime(String eventoId, int minutes) async {
+    try {
+      await context.read<EventProvider>().updateMinutosAntes(eventoId, minutes);
+
+      if (mounted) {
+        _showSuccessSnackBar(
+          'Tiempo de notificación actualizado a $minutes minutos',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error, color: Colors.white),
-                SizedBox(width: 8),
-                Expanded(child: Text('Error al eliminar evento: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        _showErrorSnackBar('Error al actualizar tiempo: $e');
       }
     }
+  }
+
+  // 🎨 Métodos helper para SnackBars mejorados
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   // Limpiar recursos cuando se destruya el widget
   @override
   void dispose() {
-    // Detener la escucha de eventos de Firebase sin acceder al context
-    // Si necesitas limpiar listeners, hazlo en el provider usando dispose()
+    // El EventProvider se limpia automáticamente en su dispose()
     super.dispose();
   }
 
-  // Páginas usando Consumer para obtener eventos de Firebase
+  // ✨ Páginas mejoradas con Consumer para reactividad
   List<Widget> _buildPages() {
     return [
       // Home Screen
       Consumer<EventProvider>(
         builder: (context, eventProvider, child) {
+          if (eventProvider.errorMessage != null) {
+            // Mostrar error si hay problemas
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _showErrorSnackBar(eventProvider.errorMessage!);
+              eventProvider.clearError();
+            });
+          }
+
           return HomeScreen(
             eventos: eventProvider.events,
             onGoToEvents: () => setState(() => _selectedIndex = 2),
@@ -358,6 +360,9 @@ class _MainScreenState extends State<MainScreen> {
             onEditEvento: _editEvento,
             onDeleteEvento: _deleteEvento,
             onGoToEvents: () => setState(() => _selectedIndex = 2),
+            // 🔔 Nuevas funciones de notificaciones
+            onToggleNotification: _toggleEventNotification,
+            onUpdateNotificationTime: _updateNotificationTime,
           );
         },
       ),
@@ -370,6 +375,9 @@ class _MainScreenState extends State<MainScreen> {
             onAddEvento: _addEvento,
             onEditEvento: _editEvento,
             onDeleteEvento: _deleteEvento,
+            // 🔔 Nuevas funciones de notificaciones
+            onToggleNotification: _toggleEventNotification,
+            onUpdateNotificationTime: _updateNotificationTime,
           );
         },
       ),
@@ -397,11 +405,19 @@ class _MainScreenState extends State<MainScreen> {
                       Theme.of(context).primaryColor,
                     ),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
                     'Cargando eventos...',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
+                  const SizedBox(height: 8),
+                  if (eventProvider.eventosConNotificacionProxima.isNotEmpty)
+                    Text(
+                      '🔔 ${eventProvider.eventosConNotificacionProxima.length} notificaciones próximas',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.orange),
+                    ),
                 ],
               ),
             );
@@ -410,47 +426,70 @@ class _MainScreenState extends State<MainScreen> {
           return IndexedStack(index: _selectedIndex, children: _buildPages());
         },
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        selectedItemColor: Theme.of(context).primaryColor,
-        unselectedItemColor: Colors.grey,
-        onTap: _onItemTapped,
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Inicio',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today),
-            label: 'Calendario',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.event),
-            label: 'Eventos',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.public),
-            label: 'World',
-          ),
-          BottomNavigationBarItem(
-            icon: _userInitial != null
-                ? CircleAvatar(
-                    radius: 14,
-                    backgroundColor: Theme.of(context).primaryColor,
-                    child: Text(
-                      _userInitial!,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+      bottomNavigationBar: Consumer<EventProvider>(
+        builder: (context, eventProvider, child) {
+          // Mostrar badge de notificaciones próximas
+          final notificacionesProximas =
+              eventProvider.eventosConNotificacionProxima.length;
+
+          return BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _selectedIndex,
+            selectedItemColor: Theme.of(context).primaryColor,
+            unselectedItemColor: Colors.grey,
+            onTap: _onItemTapped,
+            items: [
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.home),
+                label: 'Inicio',
+              ),
+              BottomNavigationBarItem(
+                icon: Stack(
+                  children: [
+                    const Icon(Icons.calendar_today),
+                    if (notificacionesProximas > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(1),
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 12,
+                            minHeight: 12,
+                          ),
+                          child: Text(
+                            '$notificacionesProximas',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
-                    ),
-                  )
-                : const Icon(Icons.settings),
-            label: _userName ?? 'Ajustes',
-          ),
-        ],
+                  ],
+                ),
+                label: 'Calendario',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.event),
+                label: 'Eventos',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.public),
+                label: 'World',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.settings),
+                label: 'Ajustes',
+              ),
+            ],
+          );
+        },
       ),
     );
   }

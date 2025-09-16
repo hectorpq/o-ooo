@@ -18,7 +18,11 @@ class CalendarScreen extends StatefulWidget {
     required this.onEditEvento,
     required this.onAddEvento,
     required this.onDeleteEvento,
-    this.onGoToEvents, // Nuevo parámetro opcional
+    this.onGoToEvents,
+    required Future<void> Function(String eventoId, int minutes)
+    onUpdateNotificationTime,
+    required Future<void> Function(String eventoId)
+    onToggleNotification, // Nuevo parámetro opcional
   });
 
   @override

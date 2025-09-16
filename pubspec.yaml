@@ -41,7 +41,14 @@ dependencies:
   http: ^1.5.0
   share_plus: ^11.1.0
 
+  flutter_local_notifications: ^17.2.2
+  permission_handler: ^11.3.1
+  audioplayers: ^6.0.0
+  timezone: ^0.9.4
 
+  speech_to_text: ^7.3.0   # 🔥 actualizado, compatible con Flutter moderno
+  shared_preferences: ^2.2.2  # Guardar tema
+  flutter_colorpicker: ^1.0.3  # Selector de colores para categorías
 
 dev_dependencies:
   flutter_test:

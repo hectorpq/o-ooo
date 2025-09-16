@@ -1,8 +1,9 @@
 // lib/screens/events_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/evento.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../providers/event_provider.dart';
 
 typedef EventoCallback = void Function(Evento evento);
 typedef EventoEditCallback = void Function(int index, Evento evento);
@@ -20,6 +21,9 @@ class EventsScreen extends StatefulWidget {
     required this.onAddEvento,
     this.onEditEvento,
     this.onDeleteEvento,
+    required Future<void> Function(String eventoId, int minutes)
+    onUpdateNotificationTime,
+    required Future<void> Function(String eventoId) onToggleNotification,
   });
 
   @override
@@ -119,6 +123,10 @@ class _EventsScreenState extends State<EventsScreen>
     DateTime fecha =
         initial?.fecha ?? DateTime.now().add(const Duration(hours: 1));
     TimeOfDay time = TimeOfDay.fromDateTime(fecha);
+
+    // NUEVO: Variables para notificaciones
+    bool notificacionActiva = initial?.notificacionActiva ?? true;
+    int minutosAntes = initial?.minutosAntes ?? 15;
 
     await showDialog(
       context: context,
@@ -263,6 +271,22 @@ class _EventsScreenState extends State<EventsScreen>
                               },
                               delay: 400,
                             ),
+                            const SizedBox(height: 20),
+                            // NUEVO: Sección de notificaciones
+                            _buildNotificationSection(
+                              notificacionActiva: notificacionActiva,
+                              minutosAntes: minutosAntes,
+                              onNotificacionChanged: (value) {
+                                setState(() {
+                                  notificacionActiva = value;
+                                });
+                              },
+                              onMinutosChanged: (value) {
+                                setState(() {
+                                  minutosAntes = value;
+                                });
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -316,14 +340,14 @@ class _EventsScreenState extends State<EventsScreen>
                                 );
                                 return;
                               }
-                              final userUid =
-                                  FirebaseAuth.instance.currentUser?.uid ?? '';
                               final nuevo = Evento(
                                 titulo: t,
                                 descripcion: d,
                                 fecha: fecha,
-                                id: '',
-                                uid: userUid,
+                                id: initial?.id ?? '',
+                                uid: initial?.uid ?? '',
+                                notificacionActiva: notificacionActiva,
+                                minutosAntes: minutosAntes,
                               );
                               if (initial == null) {
                                 widget.onAddEvento(nuevo);
@@ -372,6 +396,95 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
+  // NUEVO: Widget para la sección de notificaciones
+  Widget _buildNotificationSection({
+    required bool notificacionActiva,
+    required int minutosAntes,
+    required ValueChanged<bool> onNotificacionChanged,
+    required ValueChanged<int> onMinutosChanged,
+  }) {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 600),
+      tween: Tween(begin: 0.0, end: 1.0),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(50 * (1 - value), 0),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.orange.shade50, Colors.pink.shade50],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.notifications,
+                        color: Colors.orange.shade600,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Notificaciones',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      Switch(
+                        value: notificacionActiva,
+                        onChanged: onNotificacionChanged,
+                        activeColor: Colors.orange.shade600,
+                      ),
+                    ],
+                  ),
+                  if (notificacionActiva) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Recordar evento:',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [5, 15, 30, 60].map((minutos) {
+                        final isSelected = minutosAntes == minutos;
+                        return FilterChip(
+                          selected: isSelected,
+                          label: Text(
+                            minutos < 60
+                                ? '$minutos min antes'
+                                : '${minutos ~/ 60}h antes',
+                          ),
+                          onSelected: (_) => onMinutosChanged(minutos),
+                          selectedColor: Colors.orange.shade100,
+                          checkmarkColor: Colors.orange.shade700,
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildAnimatedTextField({
     required TextEditingController controller,
     required String label,
@@ -392,7 +505,7 @@ class _EventsScreenState extends State<EventsScreen>
                 boxShadow: [
                   BoxShadow(
                     color: Colors.grey.shade200,
-                    blurRadius: 8 < 0 ? 0 : 8,
+                    blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
                 ],
@@ -451,7 +564,7 @@ class _EventsScreenState extends State<EventsScreen>
                 boxShadow: [
                   BoxShadow(
                     color: Colors.grey.shade200,
-                    blurRadius: 8 < 0 ? 0 : 8,
+                    blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
                 ],
@@ -703,6 +816,36 @@ class _EventsScreenState extends State<EventsScreen>
                     ],
                   ),
                 ),
+                // NUEVO: Mostrar información de notificación
+                if (ev.notificacionActiva) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.notifications_active,
+                          color: Colors.orange.shade600,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Notificación: ${ev.textoTiempoNotificacion}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Row(
                   children: [
@@ -809,7 +952,7 @@ class _EventsScreenState extends State<EventsScreen>
                         boxShadow: [
                           BoxShadow(
                             color: Colors.grey.shade200,
-                            blurRadius: 10 < 0 ? 0 : 10,
+                            blurRadius: 10,
                             offset: const Offset(0, 5),
                           ),
                         ],
@@ -861,7 +1004,7 @@ class _EventsScreenState extends State<EventsScreen>
                       boxShadow: [
                         BoxShadow(
                           color: Colors.deepPurple.shade200,
-                          blurRadius: 8 < 0 ? 0 : 8,
+                          blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
                       ],
@@ -897,7 +1040,7 @@ class _EventsScreenState extends State<EventsScreen>
                       boxShadow: [
                         BoxShadow(
                           color: Colors.grey.shade200,
-                          blurRadius: 8 < 0 ? 0 : 8,
+                          blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
                       ],
@@ -1001,7 +1144,7 @@ class _EventsScreenState extends State<EventsScreen>
                           boxShadow: [
                             BoxShadow(
                               color: Colors.green.shade200,
-                              blurRadius: 8 < 0 ? 0 : 8,
+                              blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
                           ],
@@ -1034,7 +1177,7 @@ class _EventsScreenState extends State<EventsScreen>
                           boxShadow: [
                             BoxShadow(
                               color: Colors.grey.shade200,
-                              blurRadius: 8 < 0 ? 0 : 8,
+                              blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
                           ],
@@ -1192,7 +1335,7 @@ class _EventsScreenState extends State<EventsScreen>
                       color: isPast
                           ? Colors.grey.shade200
                           : Colors.blue.shade100,
-                      blurRadius: 12 < 0 ? 0 : 12,
+                      blurRadius: 12,
                       offset: const Offset(0, 6),
                       spreadRadius: 0,
                     ),
@@ -1233,7 +1376,7 @@ class _EventsScreenState extends State<EventsScreen>
                                   color: isPast
                                       ? Colors.grey.shade200
                                       : Colors.blue.shade200,
-                                  blurRadius: 8 < 0 ? 0 : 8,
+                                  blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 ),
                               ],
@@ -1284,12 +1427,42 @@ class _EventsScreenState extends State<EventsScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  ev.titulo,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        ev.titulo,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                        ),
+                                      ),
+                                    ),
+                                    // NUEVO: Botón de notificación
+                                    IconButton(
+                                      icon: Icon(
+                                        ev.notificacionActiva
+                                            ? Icons.notifications_active
+                                            : Icons.notifications_off,
+                                        color: ev.notificacionActiva
+                                            ? Colors.orange.shade600
+                                            : Colors.grey.shade400,
+                                        size: 20,
+                                      ),
+                                      onPressed: () {
+                                        Provider.of<EventProvider>(
+                                          context,
+                                          listen: false,
+                                        ).toggleNotificacion(ev.id);
+                                      },
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 32,
+                                        minHeight: 32,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
@@ -1304,50 +1477,91 @@ class _EventsScreenState extends State<EventsScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    gradient: isPast
-                                        ? LinearGradient(
-                                            colors: [
-                                              Colors.grey.shade100,
-                                              Colors.grey.shade200,
-                                            ],
-                                          )
-                                        : LinearGradient(
-                                            colors: [
-                                              Colors.green.shade100,
-                                              Colors.green.shade200,
-                                            ],
-                                          ),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        isPast ? Icons.history : Icons.schedule,
-                                        size: 16,
-                                        color: isPast
-                                            ? Colors.grey.shade600
-                                            : Colors.green.shade700,
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
                                       ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        isPast ? 'Pasado' : 'Próximo',
-                                        style: TextStyle(
-                                          color: isPast
-                                              ? Colors.grey.shade600
-                                              : Colors.green.shade700,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 12,
+                                      decoration: BoxDecoration(
+                                        gradient: isPast
+                                            ? LinearGradient(
+                                                colors: [
+                                                  Colors.grey.shade100,
+                                                  Colors.grey.shade200,
+                                                ],
+                                              )
+                                            : LinearGradient(
+                                                colors: [
+                                                  Colors.green.shade100,
+                                                  Colors.green.shade200,
+                                                ],
+                                              ),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            isPast
+                                                ? Icons.history
+                                                : Icons.schedule,
+                                            size: 16,
+                                            color: isPast
+                                                ? Colors.grey.shade600
+                                                : Colors.green.shade700,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            isPast ? 'Pasado' : 'Próximo',
+                                            style: TextStyle(
+                                              color: isPast
+                                                  ? Colors.grey.shade600
+                                                  : Colors.green.shade700,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // NUEVO: Indicador de tiempo de notificación
+                                    if (ev.notificacionActiva && !isPast) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.shade100,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.notification_add,
+                                              size: 12,
+                                              color: Colors.orange.shade700,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${ev.minutosAntes}min',
+                                              style: TextStyle(
+                                                color: Colors.orange.shade700,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
-                                  ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -1376,9 +1590,28 @@ class _EventsScreenState extends State<EventsScreen>
                                   }
                                 } else if (v == 'delete') {
                                   _confirmDelete(ev);
+                                } else if (v == 'notification') {
+                                  // NUEVO: Opción del menú para configurar notificación
+                                  _showNotificationDialog(ev);
                                 }
                               },
                               itemBuilder: (_) => [
+                                PopupMenuItem(
+                                  value: 'notification',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        ev.notificacionActiva
+                                            ? Icons.notifications_active
+                                            : Icons.notifications_off,
+                                        color: Colors.orange.shade600,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text('Notificación'),
+                                    ],
+                                  ),
+                                ),
                                 PopupMenuItem(
                                   value: 'edit',
                                   child: Row(
@@ -1418,6 +1651,197 @@ class _EventsScreenState extends State<EventsScreen>
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  // NUEVO: Dialog específico para configurar notificaciones
+  Future<void> _showNotificationDialog(Evento evento) async {
+    int minutosAntes = evento.minutosAntes;
+    bool notificacionActiva = evento.notificacionActiva;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return TweenAnimationBuilder<double>(
+              duration: const Duration(milliseconds: 300),
+              tween: Tween(begin: 0.0, end: 1.0),
+              builder: (context, value, child) {
+                return Transform.scale(
+                  scale: 0.8 + (0.2 * value),
+                  child: Opacity(
+                    opacity: value,
+                    child: AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      title: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.orange.shade400,
+                              Colors.orange.shade600,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.notifications,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Configurar notificación',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              const Text('Activar notificación:'),
+                              const Spacer(),
+                              Switch(
+                                value: notificacionActiva,
+                                onChanged: (value) {
+                                  setState(() {
+                                    notificacionActiva = value;
+                                  });
+                                },
+                                activeColor: Colors.orange.shade600,
+                              ),
+                            ],
+                          ),
+                          if (notificacionActiva) ...[
+                            const SizedBox(height: 20),
+                            const Text(
+                              'Tiempo de anticipación:',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [5, 15, 30, 60, 120].map((minutos) {
+                                final isSelected = minutosAntes == minutos;
+                                return FilterChip(
+                                  selected: isSelected,
+                                  label: Text(
+                                    minutos < 60
+                                        ? '$minutos min'
+                                        : '${minutos ~/ 60}h',
+                                  ),
+                                  onSelected: (_) {
+                                    setState(() {
+                                      minutosAntes = minutos;
+                                    });
+                                  },
+                                  selectedColor: Colors.orange.shade100,
+                                  checkmarkColor: Colors.orange.shade700,
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(
+                            'Cancelar',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.orange.shade400,
+                                Colors.orange.shade600,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              Navigator.pop(context);
+                              // Actualizar el evento
+                              final eventoActualizado = evento.copyWith(
+                                notificacionActiva: notificacionActiva,
+                                minutosAntes: minutosAntes,
+                              );
+
+                              final eventProvider = Provider.of<EventProvider>(
+                                context,
+                                listen: false,
+                              );
+                              await eventProvider.updateEvent(
+                                evento.id,
+                                eventoActualizado,
+                              );
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      Icon(
+                                        notificacionActiva
+                                            ? Icons.notifications_active
+                                            : Icons.notifications_off,
+                                        color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        notificacionActiva
+                                            ? 'Notificación activada para ${evento.titulo}'
+                                            : 'Notificación desactivada para ${evento.titulo}',
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: notificacionActiva
+                                      ? Colors.green.shade600
+                                      : Colors.grey.shade600,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                            ),
+                            child: const Text(
+                              'Guardar',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         );
       },
     );
@@ -1532,14 +1956,13 @@ class _EventsScreenState extends State<EventsScreen>
             boxShadow: [
               BoxShadow(
                 color: Colors.deepPurple.shade200,
-                blurRadius: 12 < 0 ? 0 : 12,
+                blurRadius: 12,
                 offset: const Offset(0, 6),
                 spreadRadius: 2,
               ),
             ],
           ),
           child: FloatingActionButton.extended(
-            heroTag: 'events_fab',
             onPressed: () => _showCreateOrEditDialog(),
             backgroundColor: Colors.transparent,
             elevation: 0,
