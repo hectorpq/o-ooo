@@ -78,7 +78,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ MEJORADO: Agregar un evento a Firebase con notificaciones programadas
+  // CORREGIDO: Agregar un evento a Firebase sin duplicación
   Future<void> addEvent(Evento event) async {
     try {
       _isLoading = true;
@@ -92,20 +92,19 @@ class EventProvider with ChangeNotifier {
       final eventoConUid = event.copyWith(uid: user.uid);
       final docRef = await _eventsCollection.add(eventoConUid.toMap());
 
-      // Crear el evento con el ID real de Firebase
-      final eventoConId = eventoConUid.copyWith(id: docRef.id);
+      // REMOVIDO: _events.add(eventoConId);
+      // El listener en tiempo real se encarga de actualizar la lista automáticamente
 
-      // Agregar a la lista local
-      _events.add(eventoConId);
-
-      // ✨ PROGRAMAR NOTIFICACIONES (no mostrarlas inmediatamente)
-      if (eventoConId.notificacionActiva) {
+      // PROGRAMAR NOTIFICACIONES si están activas
+      if (eventoConUid.notificacionActiva) {
+        // Crear evento con ID para las notificaciones
+        final eventoConId = eventoConUid.copyWith(id: docRef.id);
         await _programarNotificacionesEvento(eventoConId);
 
         // Mostrar confirmación inmediata SOLO de que se programó
         await NotificationService.mostrarNotificacionInmediata(
           title: '✅ Evento creado',
-          body: 'Se programó recordatorio para "${eventoConId.titulo}"',
+          body: 'Se programó recordatorio para "${eventoConUid.titulo}"',
         );
       }
 
@@ -119,7 +118,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ MEJORADO: Actualizar un evento en Firebase con reprogramación de notificaciones
+  // MEJORADO: Actualizar un evento en Firebase con reprogramación de notificaciones
   Future<void> updateEvent(String id, Evento updatedEvent) async {
     try {
       _isLoading = true;
@@ -131,16 +130,11 @@ class EventProvider with ChangeNotifier {
 
       await _eventsCollection.doc(id).update(updatedEvent.toMap());
 
-      // Actualizar en la lista local
-      final index = _events.indexWhere((e) => e.id == id);
-      if (index != -1) {
-        final eventoActualizado = updatedEvent.copyWith(id: id);
-        _events[index] = eventoActualizado;
-
-        // ✨ Reprogramar notificaciones con los nuevos datos
-        if (eventoActualizado.notificacionActiva) {
-          await _programarNotificacionesEvento(eventoActualizado);
-        }
+      // El listener en tiempo real se encargará de actualizar la lista local
+      // Pero reprogramamos notificaciones inmediatamente
+      final eventoActualizado = updatedEvent.copyWith(id: id);
+      if (eventoActualizado.notificacionActiva) {
+        await _programarNotificacionesEvento(eventoActualizado);
       }
 
       _isLoading = false;
@@ -153,7 +147,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ MEJORADO: Eliminar un evento de Firebase cancelando sus notificaciones
+  // MEJORADO: Eliminar un evento de Firebase cancelando sus notificaciones
   Future<void> deleteEvent(String id) async {
     try {
       _isLoading = true;
@@ -165,8 +159,7 @@ class EventProvider with ChangeNotifier {
 
       await _eventsCollection.doc(id).delete();
 
-      // Eliminar de la lista local
-      _events.removeWhere((e) => e.id == id);
+      // El listener en tiempo real se encargará de actualizar la lista local
 
       _isLoading = false;
       notifyListeners();
@@ -178,7 +171,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ NUEVO: Método privado mejorado para programar todas las notificaciones de un evento
+  // Método privado mejorado para programar todas las notificaciones de un evento
   Future<void> _programarNotificacionesEvento(Evento evento) async {
     try {
       if (!evento.notificacionActiva) return;
@@ -208,7 +201,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ NUEVO: Actualizar configuración de notificaciones de un evento específico
+  // Actualizar configuración de notificaciones de un evento específico
   Future<void> actualizarNotificacionEvento(
     String eventoId, {
     bool? activa,
@@ -242,10 +235,8 @@ class EventProvider with ChangeNotifier {
         await _programarNotificacionesEvento(eventoActualizado);
       }
 
-      // Actualizar en Firebase y localmente
+      // Actualizar en Firebase (el listener se encarga de actualizar localmente)
       await _eventsCollection.doc(eventoId).update(eventoActualizado.toMap());
-      _events[index] = eventoActualizado;
-      notifyListeners();
 
       print(
         '✅ Configuración de notificaciones actualizada para ${evento.titulo}',
@@ -257,7 +248,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ MEJORADO: Alternar estado de notificación de un evento
+  // Alternar estado de notificación de un evento
   Future<void> toggleNotificacion(String eventoId) async {
     try {
       final index = _events.indexWhere((e) => e.id == eventoId);
@@ -280,7 +271,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ MEJORADO: Actualizar minutos antes de notificación
+  // Actualizar minutos antes de notificación
   Future<void> updateMinutosAntes(String eventoId, int nuevosMinutos) async {
     try {
       await actualizarNotificacionEvento(eventoId, minutosAntes: nuevosMinutos);
@@ -298,7 +289,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ Marcar notificación como enviada
+  // Marcar notificación como enviada
   Future<void> marcarNotificacionEnviada(String eventoId) async {
     try {
       final index = _events.indexWhere((e) => e.id == eventoId);
@@ -308,8 +299,7 @@ class EventProvider with ChangeNotifier {
 
         // Actualizar en Firebase
         await _eventsCollection.doc(eventoId).update(eventoActualizado.toMap());
-        _events[index] = eventoActualizado;
-        notifyListeners();
+        // El listener actualizará la lista local automáticamente
 
         print('✅ Notificación marcada como enviada para ${evento.titulo}');
       }
@@ -318,7 +308,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ Verificar eventos que deben notificar ahora
+  // Verificar eventos que deben notificar ahora
   Future<void> verificarNotificacionesPendientes() async {
     try {
       for (final evento in _events) {
@@ -338,7 +328,7 @@ class EventProvider with ChangeNotifier {
     }
   }
 
-  // ✨ Obtener eventos que necesitan notificación pronto
+  // Obtener eventos que necesitan notificación pronto
   List<Evento> get eventosConNotificacionProxima {
     final ahora = DateTime.now();
     final enUnaHora = ahora.add(const Duration(hours: 1));
@@ -402,7 +392,7 @@ class EventProvider with ChangeNotifier {
         );
   }
 
-  // Escuchar cambios en tiempo real con control de suscripción
+  // CORREGIDO: Escuchar cambios en tiempo real con control de suscripción
   void listenToEvents() {
     try {
       // Cancelar suscripción anterior si existe
@@ -422,6 +412,7 @@ class EventProvider with ChangeNotifier {
           .snapshots()
           .listen(
             (snapshot) {
+              // Actualizar la lista completa desde Firebase
               _events = snapshot.docs
                   .map((doc) => Evento.fromSnapshot(doc))
                   .toList();
