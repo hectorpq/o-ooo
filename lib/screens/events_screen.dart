@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/evento.dart';
 import '../providers/event_provider.dart';
+import '../providers/theme_provider.dart';
 
 typedef EventoCallback = void Function(Evento evento);
 typedef EventoEditCallback = void Function(int index, Evento evento);
@@ -124,7 +125,6 @@ class _EventsScreenState extends State<EventsScreen>
         initial?.fecha ?? DateTime.now().add(const Duration(hours: 1));
     TimeOfDay time = TimeOfDay.fromDateTime(fecha);
 
-    // NUEVO: Variables para notificaciones
     bool notificacionActiva = initial?.notificacionActiva ?? true;
     int minutosAntes = initial?.minutosAntes ?? 15;
 
@@ -132,261 +132,312 @@ class _EventsScreenState extends State<EventsScreen>
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            String fechaTxt() => DateFormat('dd/MM/yyyy').format(fecha);
-            String horaTxt() => time.format(context);
-            return TweenAnimationBuilder<double>(
-              duration: const Duration(milliseconds: 300),
-              tween: Tween(begin: 0.0, end: 1.0),
-              builder: (context, value, child) {
-                return Transform.scale(
-                  scale: 0.7 + (0.3 * value),
-                  child: Opacity(
-                    opacity: value,
-                    child: AlertDialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      elevation: 10,
-                      backgroundColor: Colors.white,
-                      title: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.deepPurple.shade400,
-                              Colors.blue.shade400,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+        return Consumer<ThemeProvider>(
+          builder: (context, themeProvider, child) {
+            return StatefulBuilder(
+              builder: (context, setState) {
+                String fechaTxt() => DateFormat('dd/MM/yyyy').format(fecha);
+                String horaTxt() => time.format(context);
+                return TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 300),
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: 0.7 + (0.3 * value),
+                      child: Opacity(
+                        opacity: value,
+                        child: AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Center(
-                          child: Text(
-                            initial == null
-                                ? '✨ Nuevo evento'
-                                : '📝 Editar evento',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                      ),
-                      content: SingleChildScrollView(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildAnimatedTextField(
-                              controller: tituloCtrl,
-                              label: 'Título',
-                              icon: Icons.title,
-                              delay: 100,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildAnimatedTextField(
-                              controller: descCtrl,
-                              label: 'Descripción',
-                              icon: Icons.description,
-                              maxLines: 3,
-                              delay: 200,
-                            ),
-                            const SizedBox(height: 20),
-                            _buildDateTimeSelector(
-                              'Fecha',
-                              fechaTxt(),
-                              Icons.calendar_month,
-                              () async {
-                                final picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: fecha,
-                                  firstDate: DateTime(2020),
-                                  lastDate: DateTime(2100),
-                                  builder: (context, child) {
-                                    return Theme(
-                                      data: Theme.of(context).copyWith(
-                                        colorScheme: ColorScheme.light(
-                                          primary: Colors.deepPurple.shade400,
-                                          onPrimary: Colors.white,
-                                          surface: Colors.white,
-                                          onSurface: Colors.black,
-                                        ),
-                                      ),
-                                      child: child!,
-                                    );
-                                  },
-                                );
-                                if (picked != null) {
-                                  setState(
-                                    () => fecha = DateTime(
-                                      picked.year,
-                                      picked.month,
-                                      picked.day,
-                                      fecha.hour,
-                                      fecha.minute,
+                          elevation: 10,
+                          backgroundColor: themeProvider.isDarkMode
+                              ? themeProvider.cardBackgroundColor
+                              : Colors.white,
+                          title: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: themeProvider.isDarkMode
+                                  ? LinearGradient(
+                                      colors: themeProvider
+                                          .backgroundGradientColors,
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    )
+                                  : LinearGradient(
+                                      colors: [
+                                        Colors.deepPurple.shade400,
+                                        Colors.blue.shade400,
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
-                                  );
-                                }
-                              },
-                              delay: 300,
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            const SizedBox(height: 12),
-                            _buildDateTimeSelector(
-                              'Hora',
-                              horaTxt(),
-                              Icons.access_time,
-                              () async {
-                                final picked = await showTimePicker(
-                                  context: context,
-                                  initialTime: time,
-                                  builder: (context, child) {
-                                    return Theme(
-                                      data: Theme.of(context).copyWith(
-                                        colorScheme: ColorScheme.light(
-                                          primary: Colors.deepPurple.shade400,
-                                          onPrimary: Colors.white,
-                                          surface: Colors.white,
-                                          onSurface: Colors.black,
+                            child: Center(
+                              child: Text(
+                                initial == null
+                                    ? 'Nuevo evento'
+                                    : 'Editar evento',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ),
+                          ),
+                          content: SingleChildScrollView(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildAnimatedTextField(
+                                  controller: tituloCtrl,
+                                  label: 'Título',
+                                  icon: Icons.title,
+                                  delay: 100,
+                                  themeProvider: themeProvider,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildAnimatedTextField(
+                                  controller: descCtrl,
+                                  label: 'Descripción',
+                                  icon: Icons.description,
+                                  maxLines: 3,
+                                  delay: 200,
+                                  themeProvider: themeProvider,
+                                ),
+                                const SizedBox(height: 20),
+                                _buildDateTimeSelector(
+                                  'Fecha',
+                                  fechaTxt(),
+                                  Icons.calendar_month,
+                                  () async {
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate: fecha,
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime(2100),
+                                      builder: (context, child) {
+                                        return Theme(
+                                          data: Theme.of(context).copyWith(
+                                            colorScheme:
+                                                themeProvider.isDarkMode
+                                                ? ColorScheme.dark(
+                                                    primary: const Color(
+                                                      0xFF6C757D,
+                                                    ),
+                                                    onPrimary: Colors.white,
+                                                    surface: themeProvider
+                                                        .cardBackgroundColor,
+                                                    onSurface: Colors.white,
+                                                  )
+                                                : ColorScheme.light(
+                                                    primary: Colors
+                                                        .deepPurple
+                                                        .shade400,
+                                                    onPrimary: Colors.white,
+                                                    surface: Colors.white,
+                                                    onSurface: Colors.black,
+                                                  ),
+                                          ),
+                                          child: child!,
+                                        );
+                                      },
+                                    );
+                                    if (picked != null) {
+                                      setState(
+                                        () => fecha = DateTime(
+                                          picked.year,
+                                          picked.month,
+                                          picked.day,
+                                          fecha.hour,
+                                          fecha.minute,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  delay: 300,
+                                  themeProvider: themeProvider,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildDateTimeSelector(
+                                  'Hora',
+                                  horaTxt(),
+                                  Icons.access_time,
+                                  () async {
+                                    final picked = await showTimePicker(
+                                      context: context,
+                                      initialTime: time,
+                                      builder: (context, child) {
+                                        return Theme(
+                                          data: Theme.of(context).copyWith(
+                                            colorScheme:
+                                                themeProvider.isDarkMode
+                                                ? ColorScheme.dark(
+                                                    primary: const Color(
+                                                      0xFF6C757D,
+                                                    ),
+                                                    onPrimary: Colors.white,
+                                                    surface: themeProvider
+                                                        .cardBackgroundColor,
+                                                    onSurface: Colors.white,
+                                                  )
+                                                : ColorScheme.light(
+                                                    primary: Colors
+                                                        .deepPurple
+                                                        .shade400,
+                                                    onPrimary: Colors.white,
+                                                    surface: Colors.white,
+                                                    onSurface: Colors.black,
+                                                  ),
+                                          ),
+                                          child: child!,
+                                        );
+                                      },
+                                    );
+                                    if (picked != null) {
+                                      setState(() {
+                                        time = picked;
+                                        fecha = DateTime(
+                                          fecha.year,
+                                          fecha.month,
+                                          fecha.day,
+                                          picked.hour,
+                                          picked.minute,
+                                        );
+                                      });
+                                    }
+                                  },
+                                  delay: 400,
+                                  themeProvider: themeProvider,
+                                ),
+                                const SizedBox(height: 20),
+                                _buildNotificationSection(
+                                  notificacionActiva: notificacionActiva,
+                                  minutosAntes: minutosAntes,
+                                  onNotificacionChanged: (value) {
+                                    setState(() {
+                                      notificacionActiva = value;
+                                    });
+                                  },
+                                  onMinutosChanged: (value) {
+                                    setState(() {
+                                      minutosAntes = value;
+                                    });
+                                  },
+                                  themeProvider: themeProvider,
+                                ),
+                              ],
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: Text(
+                                'Cancelar',
+                                style: TextStyle(
+                                  color: themeProvider.isDarkMode
+                                      ? themeProvider.secondaryTextColor
+                                      : Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.green.shade400,
+                                    Colors.green.shade600,
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  final t = tituloCtrl.text.trim();
+                                  final d = descCtrl.text.trim();
+                                  if (t.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Row(
+                                          children: [
+                                            Icon(
+                                              Icons.warning,
+                                              color: Colors.white,
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text('El título es obligatorio'),
+                                          ],
+                                        ),
+                                        backgroundColor: Colors.orange.shade600,
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                       ),
-                                      child: child!,
                                     );
-                                  },
-                                );
-                                if (picked != null) {
-                                  setState(() {
-                                    time = picked;
-                                    fecha = DateTime(
-                                      fecha.year,
-                                      fecha.month,
-                                      fecha.day,
-                                      picked.hour,
-                                      picked.minute,
-                                    );
-                                  });
-                                }
-                              },
-                              delay: 400,
-                            ),
-                            const SizedBox(height: 20),
-                            // NUEVO: Sección de notificaciones
-                            _buildNotificationSection(
-                              notificacionActiva: notificacionActiva,
-                              minutosAntes: minutosAntes,
-                              onNotificacionChanged: (value) {
-                                setState(() {
-                                  notificacionActiva = value;
-                                });
-                              },
-                              onMinutosChanged: (value) {
-                                setState(() {
-                                  minutosAntes = value;
-                                });
-                              },
+                                    return;
+                                  }
+                                  final nuevo = Evento(
+                                    titulo: t,
+                                    descripcion: d,
+                                    fecha: fecha,
+                                    id: initial?.id ?? '',
+                                    uid: initial?.uid ?? '',
+                                    notificacionActiva: notificacionActiva,
+                                    minutosAntes: minutosAntes,
+                                  );
+                                  if (initial == null) {
+                                    widget.onAddEvento(nuevo);
+                                  } else {
+                                    if (editingIndex != null &&
+                                        widget.onEditEvento != null) {
+                                      widget.onEditEvento!(editingIndex, nuevo);
+                                    } else {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Editar no conectado al padre',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                  Navigator.pop(context);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Guardar',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                          ),
-                          child: Text(
-                            'Cancelar',
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
-                        ),
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.green.shade400,
-                                Colors.green.shade600,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ElevatedButton(
-                            onPressed: () {
-                              final t = tituloCtrl.text.trim();
-                              final d = descCtrl.text.trim();
-                              if (t.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Row(
-                                      children: [
-                                        Icon(
-                                          Icons.warning,
-                                          color: Colors.white,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text('El título es obligatorio'),
-                                      ],
-                                    ),
-                                    backgroundColor: Colors.orange.shade600,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-                              final nuevo = Evento(
-                                titulo: t,
-                                descripcion: d,
-                                fecha: fecha,
-                                id: initial?.id ?? '',
-                                uid: initial?.uid ?? '',
-                                notificacionActiva: notificacionActiva,
-                                minutosAntes: minutosAntes,
-                              );
-                              if (initial == null) {
-                                widget.onAddEvento(nuevo);
-                              } else {
-                                if (editingIndex != null &&
-                                    widget.onEditEvento != null) {
-                                  widget.onEditEvento!(editingIndex, nuevo);
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Editar no conectado al padre',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              }
-                              Navigator.pop(context);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                            ),
-                            child: const Text(
-                              'Guardar',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                    );
+                  },
                 );
               },
             );
@@ -396,12 +447,12 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  // NUEVO: Widget para la sección de notificaciones
   Widget _buildNotificationSection({
     required bool notificacionActiva,
     required int minutosAntes,
     required ValueChanged<bool> onNotificacionChanged,
     required ValueChanged<int> onMinutosChanged,
+    required ThemeProvider themeProvider,
   }) {
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 600),
@@ -414,13 +465,22 @@ class _EventsScreenState extends State<EventsScreen>
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.orange.shade50, Colors.pink.shade50],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: themeProvider.isDarkMode
+                    ? null
+                    : LinearGradient(
+                        colors: [Colors.orange.shade50, Colors.pink.shade50],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                color: themeProvider.isDarkMode
+                    ? themeProvider.cardBackgroundColor
+                    : null,
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.orange.shade200),
+                border: Border.all(
+                  color: themeProvider.isDarkMode
+                      ? themeProvider.cardBorderColor
+                      : Colors.orange.shade200,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,22 +489,29 @@ class _EventsScreenState extends State<EventsScreen>
                     children: [
                       Icon(
                         Icons.notifications,
-                        color: Colors.orange.shade600,
+                        color: themeProvider.isDarkMode
+                            ? const Color(0xFF6C757D)
+                            : Colors.orange.shade600,
                         size: 24,
                       ),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         'Notificaciones',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: themeProvider.isDarkMode
+                              ? themeProvider.primaryTextColor
+                              : Colors.black,
                         ),
                       ),
                       const Spacer(),
                       Switch(
                         value: notificacionActiva,
                         onChanged: onNotificacionChanged,
-                        activeColor: Colors.orange.shade600,
+                        activeColor: themeProvider.isDarkMode
+                            ? const Color(0xFF6C757D)
+                            : Colors.orange.shade600,
                       ),
                     ],
                   ),
@@ -453,7 +520,9 @@ class _EventsScreenState extends State<EventsScreen>
                     Text(
                       'Recordar evento:',
                       style: TextStyle(
-                        color: Colors.grey.shade700,
+                        color: themeProvider.isDarkMode
+                            ? const Color(0xFFB0BEC5)
+                            : Colors.grey.shade700,
                         fontSize: 14,
                       ),
                     ),
@@ -468,10 +537,26 @@ class _EventsScreenState extends State<EventsScreen>
                             minutos < 60
                                 ? '$minutos min antes'
                                 : '${minutos ~/ 60}h antes',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? (themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.orange.shade700)
+                                  : (themeProvider.isDarkMode
+                                        ? const Color(0xFFB0BEC5)
+                                        : Colors.grey.shade600),
+                            ),
                           ),
                           onSelected: (_) => onMinutosChanged(minutos),
-                          selectedColor: Colors.orange.shade100,
-                          checkmarkColor: Colors.orange.shade700,
+                          selectedColor: themeProvider.isDarkMode
+                              ? const Color(0xFF6C757D)
+                              : Colors.orange.shade100,
+                          backgroundColor: themeProvider.isDarkMode
+                              ? themeProvider.cardBackgroundColor
+                              : Colors.grey.shade100,
+                          checkmarkColor: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.orange.shade700,
                         );
                       }).toList(),
                     ),
@@ -491,6 +576,7 @@ class _EventsScreenState extends State<EventsScreen>
     required IconData icon,
     int maxLines = 1,
     int delay = 0,
+    required ThemeProvider themeProvider,
   }) {
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 500 + delay),
@@ -504,7 +590,9 @@ class _EventsScreenState extends State<EventsScreen>
               decoration: BoxDecoration(
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.shade200,
+                    color: themeProvider.isDarkMode
+                        ? themeProvider.cardBorderColor.withOpacity(0.3)
+                        : Colors.grey.shade200,
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -513,19 +601,38 @@ class _EventsScreenState extends State<EventsScreen>
               child: TextField(
                 controller: controller,
                 maxLines: maxLines,
+                style: TextStyle(
+                  color: themeProvider.isDarkMode
+                      ? themeProvider.primaryTextColor
+                      : Colors.black,
+                ),
                 decoration: InputDecoration(
                   labelText: label,
-                  prefixIcon: Icon(icon, color: Colors.deepPurple.shade400),
+                  labelStyle: TextStyle(
+                    color: themeProvider.isDarkMode
+                        ? const Color(0xFFB0BEC5)
+                        : Colors.grey.shade600,
+                  ),
+                  prefixIcon: Icon(
+                    icon,
+                    color: themeProvider.isDarkMode
+                        ? const Color(0xFF6C757D)
+                        : Colors.deepPurple.shade400,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(15),
                     borderSide: BorderSide.none,
                   ),
                   filled: true,
-                  fillColor: Colors.grey.shade50,
+                  fillColor: themeProvider.isDarkMode
+                      ? themeProvider.cardBackgroundColor
+                      : Colors.grey.shade50,
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(15),
                     borderSide: BorderSide(
-                      color: Colors.deepPurple.shade400,
+                      color: themeProvider.isDarkMode
+                          ? const Color(0xFF6C757D)
+                          : Colors.deepPurple.shade400,
                       width: 2,
                     ),
                   ),
@@ -544,6 +651,7 @@ class _EventsScreenState extends State<EventsScreen>
     IconData icon,
     VoidCallback onTap, {
     int delay = 0,
+    required ThemeProvider themeProvider,
   }) {
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 500 + delay),
@@ -555,15 +663,25 @@ class _EventsScreenState extends State<EventsScreen>
             opacity: animValue,
             child: Container(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.blue.shade50, Colors.purple.shade50],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: themeProvider.isDarkMode
+                    ? null
+                    : LinearGradient(
+                        colors: [Colors.blue.shade50, Colors.purple.shade50],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                color: themeProvider.isDarkMode
+                    ? themeProvider.cardBackgroundColor
+                    : null,
                 borderRadius: BorderRadius.circular(15),
+                border: themeProvider.isDarkMode
+                    ? Border.all(color: themeProvider.cardBorderColor)
+                    : null,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.shade200,
+                    color: themeProvider.isDarkMode
+                        ? themeProvider.cardBorderColor.withOpacity(0.3)
+                        : Colors.grey.shade200,
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -578,7 +696,13 @@ class _EventsScreenState extends State<EventsScreen>
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        Icon(icon, color: Colors.deepPurple.shade400, size: 24),
+                        Icon(
+                          icon,
+                          color: themeProvider.isDarkMode
+                              ? const Color(0xFF6C757D)
+                              : Colors.deepPurple.shade400,
+                          size: 24,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -587,7 +711,9 @@ class _EventsScreenState extends State<EventsScreen>
                               Text(
                                 label,
                                 style: TextStyle(
-                                  color: Colors.grey.shade600,
+                                  color: themeProvider.isDarkMode
+                                      ? const Color(0xFFB0BEC5)
+                                      : Colors.grey.shade600,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -595,9 +721,12 @@ class _EventsScreenState extends State<EventsScreen>
                               const SizedBox(height: 2),
                               Text(
                                 value,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
+                                  color: themeProvider.isDarkMode
+                                      ? themeProvider.primaryTextColor
+                                      : Colors.black,
                                 ),
                               ),
                             ],
@@ -605,7 +734,9 @@ class _EventsScreenState extends State<EventsScreen>
                         ),
                         Icon(
                           Icons.arrow_forward_ios,
-                          color: Colors.grey.shade400,
+                          color: themeProvider.isDarkMode
+                              ? const Color(0xFFB0BEC5)
+                              : Colors.grey.shade400,
                           size: 16,
                         ),
                       ],
@@ -620,7 +751,7 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  void _confirmDelete(Evento ev) {
+  void _confirmDelete(Evento ev, ThemeProvider themeProvider) {
     final idx = widget.eventos.indexOf(ev);
     showDialog(
       context: context,
@@ -636,34 +767,52 @@ class _EventsScreenState extends State<EventsScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
-                backgroundColor: Colors.white,
+                backgroundColor: themeProvider.isDarkMode
+                    ? themeProvider.cardBackgroundColor
+                    : Colors.white,
                 title: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade50,
+                    color: themeProvider.isDarkMode
+                        ? Colors.red.shade900.withOpacity(0.3)
+                        : Colors.red.shade50,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
                       Icon(Icons.warning, color: Colors.red.shade400, size: 28),
                       const SizedBox(width: 12),
-                      const Text(
+                      Text(
                         'Eliminar evento',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: themeProvider.isDarkMode
+                              ? themeProvider.primaryTextColor
+                              : Colors.black,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                content: const Text(
+                content: Text(
                   '¿Seguro que deseas eliminar este evento?',
-                  style: TextStyle(fontSize: 16),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: themeProvider.isDarkMode
+                        ? themeProvider.primaryTextColor
+                        : Colors.black,
+                  ),
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: Text(
                       'Cancelar',
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style: TextStyle(
+                        color: themeProvider.isDarkMode
+                            ? themeProvider.secondaryTextColor
+                            : Colors.grey.shade600,
+                      ),
                     ),
                   ),
                   Container(
@@ -710,16 +859,18 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  void _showDetail(Evento ev) {
+  void _showDetail(Evento ev, ThemeProvider themeProvider) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
+          decoration: BoxDecoration(
+            color: themeProvider.isDarkMode
+                ? themeProvider.cardBackgroundColor
+                : Colors.white,
+            borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(25),
               topRight: Radius.circular(25),
             ),
@@ -733,7 +884,9 @@ class _EventsScreenState extends State<EventsScreen>
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: themeProvider.isDarkMode
+                        ? themeProvider.secondaryTextColor.withOpacity(0.3)
+                        : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -741,11 +894,22 @@ class _EventsScreenState extends State<EventsScreen>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.blue.shade400, Colors.purple.shade400],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    gradient: themeProvider.isDarkMode
+                        ? LinearGradient(
+                            colors: themeProvider.backgroundGradientColors
+                                .take(2)
+                                .toList(),
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : LinearGradient(
+                            colors: [
+                              Colors.blue.shade400,
+                              Colors.purple.shade400,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: Row(
@@ -782,9 +946,15 @@ class _EventsScreenState extends State<EventsScreen>
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
+                    color: themeProvider.isDarkMode
+                        ? themeProvider.cardBackgroundColor
+                        : Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(
+                      color: themeProvider.isDarkMode
+                          ? themeProvider.cardBorderColor
+                          : Colors.grey.shade200,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -793,7 +963,9 @@ class _EventsScreenState extends State<EventsScreen>
                         children: [
                           Icon(
                             Icons.description,
-                            color: Colors.grey.shade600,
+                            color: themeProvider.isDarkMode
+                                ? const Color(0xFF6C757D)
+                                : Colors.grey.shade600,
                             size: 20,
                           ),
                           const SizedBox(width: 8),
@@ -801,7 +973,9 @@ class _EventsScreenState extends State<EventsScreen>
                             'Descripción',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade700,
+                              color: themeProvider.isDarkMode
+                                  ? themeProvider.primaryTextColor
+                                  : Colors.grey.shade700,
                             ),
                           ),
                         ],
@@ -811,21 +985,31 @@ class _EventsScreenState extends State<EventsScreen>
                         ev.descripcion.isEmpty
                             ? 'Sin descripción'
                             : ev.descripcion,
-                        style: const TextStyle(fontSize: 16),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: themeProvider.isDarkMode
+                              ? themeProvider.primaryTextColor
+                              : Colors.black,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                // NUEVO: Mostrar información de notificación
                 if (ev.notificacionActiva) ...[
                   const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
+                      color: themeProvider.isDarkMode
+                          ? Colors.orange.shade900.withOpacity(0.3)
+                          : Colors.orange.shade50,
                       borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Colors.orange.shade200),
+                      border: Border.all(
+                        color: themeProvider.isDarkMode
+                            ? Colors.orange.shade700
+                            : Colors.orange.shade200,
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -839,7 +1023,9 @@ class _EventsScreenState extends State<EventsScreen>
                           'Notificación: ${ev.textoTiempoNotificacion}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade700,
+                            color: themeProvider.isDarkMode
+                                ? Colors.orange.shade400
+                                : Colors.orange.shade700,
                           ),
                         ),
                       ],
@@ -899,7 +1085,7 @@ class _EventsScreenState extends State<EventsScreen>
                         child: ElevatedButton.icon(
                           onPressed: () {
                             Navigator.pop(context);
-                            _confirmDelete(ev);
+                            _confirmDelete(ev, themeProvider);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.transparent,
@@ -928,22 +1114,26 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(ThemeProvider themeProvider) {
     return SlideTransition(
       position: _headerSlideAnimation,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.deepPurple.shade50, Colors.blue.shade50],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          gradient: themeProvider.isDarkMode
+              ? null
+              : LinearGradient(
+                  colors: [Colors.deepPurple.shade50, Colors.blue.shade50],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+          color: themeProvider.isDarkMode
+              ? themeProvider.cardBackgroundColor.withOpacity(0.1)
+              : null,
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16),
           child: Column(
             children: [
-              // Search
               Row(
                 children: [
                   Expanded(
@@ -951,7 +1141,9 @@ class _EventsScreenState extends State<EventsScreen>
                       decoration: BoxDecoration(
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.shade200,
+                            color: themeProvider.isDarkMode
+                                ? themeProvider.cardBorderColor.withOpacity(0.3)
+                                : Colors.grey.shade200,
                             blurRadius: 10,
                             offset: const Offset(0, 5),
                           ),
@@ -959,15 +1151,32 @@ class _EventsScreenState extends State<EventsScreen>
                       ),
                       child: TextField(
                         controller: _searchController,
+                        style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? themeProvider.primaryTextColor
+                              : Colors.black,
+                        ),
                         decoration: InputDecoration(
                           prefixIcon: Icon(
                             Icons.search,
-                            color: Colors.deepPurple.shade400,
+                            color: themeProvider.isDarkMode
+                                ? const Color(0xFF6C757D)
+                                : Colors.deepPurple.shade400,
                           ),
                           hintText: 'Buscar título, descripción o fecha',
+                          hintStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? const Color(0xFFB0BEC5)
+                                : Colors.grey.shade500,
+                          ),
                           suffixIcon: _search.isNotEmpty
                               ? IconButton(
-                                  icon: const Icon(Icons.clear),
+                                  icon: Icon(
+                                    Icons.clear,
+                                    color: themeProvider.isDarkMode
+                                        ? const Color(0xFFB0BEC5)
+                                        : Colors.grey.shade500,
+                                  ),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() {
@@ -981,7 +1190,9 @@ class _EventsScreenState extends State<EventsScreen>
                             borderSide: BorderSide.none,
                           ),
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: themeProvider.isDarkMode
+                              ? themeProvider.cardBackgroundColor
+                              : Colors.white,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 20,
                             vertical: 16,
@@ -994,16 +1205,24 @@ class _EventsScreenState extends State<EventsScreen>
                   const SizedBox(width: 12),
                   Container(
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.deepPurple.shade400,
-                          Colors.blue.shade400,
-                        ],
-                      ),
+                      gradient: themeProvider.isDarkMode
+                          ? LinearGradient(
+                              colors: themeProvider.backgroundGradientColors
+                                  .take(2)
+                                  .toList(),
+                            )
+                          : LinearGradient(
+                              colors: [
+                                Colors.deepPurple.shade400,
+                                Colors.blue.shade400,
+                              ],
+                            ),
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.deepPurple.shade200,
+                          color: themeProvider.isDarkMode
+                              ? themeProvider.cardBorderColor.withOpacity(0.3)
+                              : Colors.deepPurple.shade200,
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
@@ -1029,17 +1248,20 @@ class _EventsScreenState extends State<EventsScreen>
                 ],
               ),
               const SizedBox(height: 16),
-              // Filters
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: themeProvider.isDarkMode
+                          ? themeProvider.cardBackgroundColor
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey.shade200,
+                          color: themeProvider.isDarkMode
+                              ? themeProvider.cardBorderColor.withOpacity(0.3)
+                              : Colors.grey.shade200,
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
@@ -1051,7 +1273,9 @@ class _EventsScreenState extends State<EventsScreen>
                       borderColor: Colors.transparent,
                       fillColor: Colors.transparent,
                       selectedColor: Colors.white,
-                      color: Colors.grey.shade600,
+                      color: themeProvider.isDarkMode
+                          ? const Color(0xFFB0BEC5)
+                          : Colors.grey.shade600,
                       constraints: const BoxConstraints(
                         minHeight: 45,
                         minWidth: 70,
@@ -1172,11 +1396,17 @@ class _EventsScreenState extends State<EventsScreen>
                       const SizedBox(width: 8),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: themeProvider.isDarkMode
+                              ? themeProvider.cardBackgroundColor
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(15),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.grey.shade200,
+                              color: themeProvider.isDarkMode
+                                  ? themeProvider.cardBorderColor.withOpacity(
+                                      0.3,
+                                    )
+                                  : Colors.grey.shade200,
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
@@ -1191,7 +1421,9 @@ class _EventsScreenState extends State<EventsScreen>
                               padding: const EdgeInsets.all(12),
                               child: Icon(
                                 Icons.refresh,
-                                color: Colors.deepPurple.shade400,
+                                color: themeProvider.isDarkMode
+                                    ? const Color(0xFF6C757D)
+                                    : Colors.deepPurple.shade400,
                               ),
                             ),
                           ),
@@ -1208,7 +1440,7 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  Widget _buildEventCard(Evento ev) {
+  Widget _buildEventCard(Evento ev, ThemeProvider themeProvider) {
     final isPast = ev.fecha.isBefore(DateTime.now());
     final day = DateFormat('dd').format(ev.fecha);
     final month = DateFormat('MMM').format(ev.fecha);
@@ -1250,7 +1482,6 @@ class _EventsScreenState extends State<EventsScreen>
                 ),
               ),
               confirmDismiss: (_) async {
-                // confirm
                 final idx = widget.eventos.indexOf(ev);
                 if (idx != -1) {
                   final result = await showDialog<bool>(
@@ -1267,15 +1498,37 @@ class _EventsScreenState extends State<EventsScreen>
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              title: const Text('⚠️ Eliminar'),
-                              content: const Text(
+                              backgroundColor: themeProvider.isDarkMode
+                                  ? themeProvider.cardBackgroundColor
+                                  : Colors.white,
+                              title: Text(
+                                'Eliminar',
+                                style: TextStyle(
+                                  color: themeProvider.isDarkMode
+                                      ? themeProvider.primaryTextColor
+                                      : Colors.black,
+                                ),
+                              ),
+                              content: Text(
                                 '¿Deseas eliminar este evento?',
+                                style: TextStyle(
+                                  color: themeProvider.isDarkMode
+                                      ? themeProvider.primaryTextColor
+                                      : Colors.black,
+                                ),
                               ),
                               actions: [
                                 TextButton(
                                   onPressed: () =>
                                       Navigator.pop(context, false),
-                                  child: const Text('No'),
+                                  child: Text(
+                                    'No',
+                                    style: TextStyle(
+                                      color: themeProvider.isDarkMode
+                                          ? themeProvider.secondaryTextColor
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
                                 ),
                                 Container(
                                   decoration: BoxDecoration(
@@ -1328,11 +1581,15 @@ class _EventsScreenState extends State<EventsScreen>
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: themeProvider.isDarkMode
+                      ? themeProvider.cardBackgroundColor
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: isPast
+                      color: themeProvider.isDarkMode
+                          ? themeProvider.cardBorderColor.withOpacity(0.3)
+                          : isPast
                           ? Colors.grey.shade200
                           : Colors.blue.shade100,
                       blurRadius: 12,
@@ -1344,13 +1601,12 @@ class _EventsScreenState extends State<EventsScreen>
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: () => _showDetail(ev),
+                    onTap: () => _showDetail(ev, themeProvider),
                     borderRadius: BorderRadius.circular(20),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Row(
                         children: [
-                          // Date badge
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -1359,10 +1615,23 @@ class _EventsScreenState extends State<EventsScreen>
                             decoration: BoxDecoration(
                               gradient: isPast
                                   ? LinearGradient(
-                                      colors: [
-                                        Colors.grey.shade300,
-                                        Colors.grey.shade400,
-                                      ],
+                                      colors: themeProvider.isDarkMode
+                                          ? [
+                                              themeProvider.secondaryTextColor,
+                                              themeProvider.secondaryTextColor
+                                                  .withOpacity(0.7),
+                                            ]
+                                          : [
+                                              Colors.grey.shade300,
+                                              Colors.grey.shade400,
+                                            ],
+                                    )
+                                  : themeProvider.isDarkMode
+                                  ? LinearGradient(
+                                      colors: themeProvider
+                                          .backgroundGradientColors
+                                          .take(2)
+                                          .toList(),
                                     )
                                   : LinearGradient(
                                       colors: [
@@ -1373,7 +1642,10 @@ class _EventsScreenState extends State<EventsScreen>
                               borderRadius: BorderRadius.circular(15),
                               boxShadow: [
                                 BoxShadow(
-                                  color: isPast
+                                  color: themeProvider.isDarkMode
+                                      ? themeProvider.cardBorderColor
+                                            .withOpacity(0.3)
+                                      : isPast
                                       ? Colors.grey.shade200
                                       : Colors.blue.shade200,
                                   blurRadius: 8,
@@ -1422,7 +1694,6 @@ class _EventsScreenState extends State<EventsScreen>
                             ),
                           ),
                           const SizedBox(width: 16),
-                          // Content
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1432,13 +1703,15 @@ class _EventsScreenState extends State<EventsScreen>
                                     Expanded(
                                       child: Text(
                                         ev.titulo,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 18,
+                                          color: themeProvider.isDarkMode
+                                              ? themeProvider.primaryTextColor
+                                              : Colors.black,
                                         ),
                                       ),
                                     ),
-                                    // NUEVO: Botón de notificación
                                     IconButton(
                                       icon: Icon(
                                         ev.notificacionActiva
@@ -1446,7 +1719,9 @@ class _EventsScreenState extends State<EventsScreen>
                                             : Icons.notifications_off,
                                         color: ev.notificacionActiva
                                             ? Colors.orange.shade600
-                                            : Colors.grey.shade400,
+                                            : (themeProvider.isDarkMode
+                                                  ? const Color(0xFFB0BEC5)
+                                                  : Colors.grey.shade400),
                                         size: 20,
                                       ),
                                       onPressed: () {
@@ -1472,7 +1747,9 @@ class _EventsScreenState extends State<EventsScreen>
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: Colors.grey.shade600,
+                                    color: themeProvider.isDarkMode
+                                        ? const Color(0xFFB0BEC5)
+                                        : Colors.grey.shade600,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -1487,10 +1764,15 @@ class _EventsScreenState extends State<EventsScreen>
                                       decoration: BoxDecoration(
                                         gradient: isPast
                                             ? LinearGradient(
-                                                colors: [
-                                                  Colors.grey.shade100,
-                                                  Colors.grey.shade200,
-                                                ],
+                                                colors: themeProvider.isDarkMode
+                                                    ? [
+                                                        Colors.grey.shade800,
+                                                        Colors.grey.shade700,
+                                                      ]
+                                                    : [
+                                                        Colors.grey.shade100,
+                                                        Colors.grey.shade200,
+                                                      ],
                                               )
                                             : LinearGradient(
                                                 colors: [
@@ -1509,7 +1791,9 @@ class _EventsScreenState extends State<EventsScreen>
                                                 : Icons.schedule,
                                             size: 16,
                                             color: isPast
-                                                ? Colors.grey.shade600
+                                                ? (themeProvider.isDarkMode
+                                                      ? const Color(0xFFB0BEC5)
+                                                      : Colors.grey.shade600)
                                                 : Colors.green.shade700,
                                           ),
                                           const SizedBox(width: 6),
@@ -1517,7 +1801,11 @@ class _EventsScreenState extends State<EventsScreen>
                                             isPast ? 'Pasado' : 'Próximo',
                                             style: TextStyle(
                                               color: isPast
-                                                  ? Colors.grey.shade600
+                                                  ? (themeProvider.isDarkMode
+                                                        ? const Color(
+                                                            0xFFB0BEC5,
+                                                          )
+                                                        : Colors.grey.shade600)
                                                   : Colors.green.shade700,
                                               fontWeight: FontWeight.w600,
                                               fontSize: 12,
@@ -1526,7 +1814,6 @@ class _EventsScreenState extends State<EventsScreen>
                                         ],
                                       ),
                                     ),
-                                    // NUEVO: Indicador de tiempo de notificación
                                     if (ev.notificacionActiva && !isPast) ...[
                                       const SizedBox(width: 8),
                                       Container(
@@ -1535,7 +1822,10 @@ class _EventsScreenState extends State<EventsScreen>
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.orange.shade100,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.orange.shade900
+                                                    .withOpacity(0.3)
+                                              : Colors.orange.shade100,
                                           borderRadius: BorderRadius.circular(
                                             12,
                                           ),
@@ -1568,14 +1858,21 @@ class _EventsScreenState extends State<EventsScreen>
                           ),
                           Container(
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
+                              color: themeProvider.isDarkMode
+                                  ? themeProvider.cardBackgroundColor
+                                  : Colors.grey.shade100,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: PopupMenuButton<String>(
                               icon: Icon(
                                 Icons.more_vert,
-                                color: Colors.grey.shade600,
+                                color: themeProvider.isDarkMode
+                                    ? const Color(0xFFB0BEC5)
+                                    : Colors.grey.shade600,
                               ),
+                              color: themeProvider.isDarkMode
+                                  ? themeProvider.cardBackgroundColor
+                                  : Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(15),
                               ),
@@ -1589,10 +1886,9 @@ class _EventsScreenState extends State<EventsScreen>
                                     );
                                   }
                                 } else if (v == 'delete') {
-                                  _confirmDelete(ev);
+                                  _confirmDelete(ev, themeProvider);
                                 } else if (v == 'notification') {
-                                  // NUEVO: Opción del menú para configurar notificación
-                                  _showNotificationDialog(ev);
+                                  _showNotificationDialog(ev, themeProvider);
                                 }
                               },
                               itemBuilder: (_) => [
@@ -1608,7 +1904,14 @@ class _EventsScreenState extends State<EventsScreen>
                                         size: 20,
                                       ),
                                       const SizedBox(width: 8),
-                                      const Text('Notificación'),
+                                      Text(
+                                        'Notificación',
+                                        style: TextStyle(
+                                          color: themeProvider.isDarkMode
+                                              ? themeProvider.primaryTextColor
+                                              : Colors.black,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1622,7 +1925,14 @@ class _EventsScreenState extends State<EventsScreen>
                                         size: 20,
                                       ),
                                       const SizedBox(width: 8),
-                                      const Text('Editar'),
+                                      Text(
+                                        'Editar',
+                                        style: TextStyle(
+                                          color: themeProvider.isDarkMode
+                                              ? themeProvider.primaryTextColor
+                                              : Colors.black,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1636,7 +1946,14 @@ class _EventsScreenState extends State<EventsScreen>
                                         size: 20,
                                       ),
                                       const SizedBox(width: 8),
-                                      const Text('Eliminar'),
+                                      Text(
+                                        'Eliminar',
+                                        style: TextStyle(
+                                          color: themeProvider.isDarkMode
+                                              ? themeProvider.primaryTextColor
+                                              : Colors.black,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1656,8 +1973,10 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  // NUEVO: Dialog específico para configurar notificaciones
-  Future<void> _showNotificationDialog(Evento evento) async {
+  Future<void> _showNotificationDialog(
+    Evento evento,
+    ThemeProvider themeProvider,
+  ) async {
     int minutosAntes = evento.minutosAntes;
     bool notificacionActiva = evento.notificacionActiva;
 
@@ -1678,6 +1997,9 @@ class _EventsScreenState extends State<EventsScreen>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
+                      backgroundColor: themeProvider.isDarkMode
+                          ? themeProvider.cardBackgroundColor
+                          : Colors.white,
                       title: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -1713,7 +2035,14 @@ class _EventsScreenState extends State<EventsScreen>
                         children: [
                           Row(
                             children: [
-                              const Text('Activar notificación:'),
+                              Text(
+                                'Activar notificación:',
+                                style: TextStyle(
+                                  color: themeProvider.isDarkMode
+                                      ? themeProvider.primaryTextColor
+                                      : Colors.black,
+                                ),
+                              ),
                               const Spacer(),
                               Switch(
                                 value: notificacionActiva,
@@ -1728,9 +2057,14 @@ class _EventsScreenState extends State<EventsScreen>
                           ),
                           if (notificacionActiva) ...[
                             const SizedBox(height: 20),
-                            const Text(
+                            Text(
                               'Tiempo de anticipación:',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: themeProvider.isDarkMode
+                                    ? themeProvider.primaryTextColor
+                                    : Colors.black,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             Wrap(
@@ -1744,14 +2078,30 @@ class _EventsScreenState extends State<EventsScreen>
                                     minutos < 60
                                         ? '$minutos min'
                                         : '${minutos ~/ 60}h',
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? (themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.orange.shade700)
+                                          : (themeProvider.isDarkMode
+                                                ? const Color(0xFFB0BEC5)
+                                                : Colors.grey.shade600),
+                                    ),
                                   ),
                                   onSelected: (_) {
                                     setState(() {
                                       minutosAntes = minutos;
                                     });
                                   },
-                                  selectedColor: Colors.orange.shade100,
-                                  checkmarkColor: Colors.orange.shade700,
+                                  selectedColor: themeProvider.isDarkMode
+                                      ? const Color(0xFF6C757D)
+                                      : Colors.orange.shade100,
+                                  backgroundColor: themeProvider.isDarkMode
+                                      ? themeProvider.cardBackgroundColor
+                                      : Colors.grey.shade100,
+                                  checkmarkColor: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.orange.shade700,
                                 );
                               }).toList(),
                             ),
@@ -1763,7 +2113,11 @@ class _EventsScreenState extends State<EventsScreen>
                           onPressed: () => Navigator.pop(context),
                           child: Text(
                             'Cancelar',
-                            style: TextStyle(color: Colors.grey.shade600),
+                            style: TextStyle(
+                              color: themeProvider.isDarkMode
+                                  ? themeProvider.secondaryTextColor
+                                  : Colors.grey.shade600,
+                            ),
                           ),
                         ),
                         Container(
@@ -1779,7 +2133,6 @@ class _EventsScreenState extends State<EventsScreen>
                           child: ElevatedButton(
                             onPressed: () async {
                               Navigator.pop(context);
-                              // Actualizar el evento
                               final eventoActualizado = evento.copyWith(
                                 notificacionActiva: notificacionActiva,
                                 minutosAntes: minutosAntes,
@@ -1849,135 +2202,179 @@ class _EventsScreenState extends State<EventsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final list = _filtered;
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: const Text(
-          '🗓️ Eventos',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.deepPurple.shade400, Colors.blue.shade400],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        final list = _filtered;
+        return Scaffold(
+          backgroundColor: themeProvider.isDarkMode
+              ? const Color(0xFF121212)
+              : Colors.grey.shade50,
+          appBar: AppBar(
+            title: const Text(
+              'Eventos',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+                color: Colors.white,
+              ),
             ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: true,
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                gradient: themeProvider.isDarkMode
+                    ? LinearGradient(
+                        colors: themeProvider.backgroundGradientColors,
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : LinearGradient(
+                        colors: [
+                          Colors.deepPurple.shade400,
+                          Colors.blue.shade400,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+              ),
+            ),
+            foregroundColor: Colors.white,
           ),
-        ),
-        foregroundColor: Colors.white,
-      ),
-      body: Column(
-        children: [
-          _buildHeader(),
-          const SizedBox(height: 8),
-          Expanded(
-            child: list.isEmpty
-                ? Center(
-                    child: TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 800),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      builder: (context, value, child) {
-                        return Transform.scale(
-                          scale: 0.8 + (0.2 * value),
-                          child: Opacity(
-                            opacity: value,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(32),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Colors.grey.shade100,
-                                        Colors.grey.shade200,
-                                      ],
+          body: Column(
+            children: [
+              _buildHeader(themeProvider),
+              const SizedBox(height: 8),
+              Expanded(
+                child: list.isEmpty
+                    ? Center(
+                        child: TweenAnimationBuilder<double>(
+                          duration: const Duration(milliseconds: 800),
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          builder: (context, value, child) {
+                            return Transform.scale(
+                              scale: 0.8 + (0.2 * value),
+                              child: Opacity(
+                                opacity: value,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(32),
+                                      decoration: BoxDecoration(
+                                        gradient: themeProvider.isDarkMode
+                                            ? null
+                                            : LinearGradient(
+                                                colors: [
+                                                  Colors.grey.shade100,
+                                                  Colors.grey.shade200,
+                                                ],
+                                              ),
+                                        color: themeProvider.isDarkMode
+                                            ? themeProvider.cardBackgroundColor
+                                                  .withOpacity(0.5)
+                                            : null,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.event_busy,
+                                        size: 80,
+                                        color: themeProvider.isDarkMode
+                                            ? themeProvider.secondaryTextColor
+                                            : Colors.grey,
+                                      ),
                                     ),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.event_busy,
-                                    size: 80,
-                                    color: Colors.grey,
-                                  ),
+                                    const SizedBox(height: 24),
+                                    Text(
+                                      'No hay eventos',
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.white
+                                            : Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Crea tu primer evento con el botón',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: themeProvider.isDarkMode
+                                            ? const Color(0xFFB0BEC5)
+                                            : Colors.grey.shade500,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  'No hay eventos',
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Crea tu primer evento con el botón ✨',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: () async {
-                      // aquí podrías recargar desde una BD; por ahora sólo refresca UI
-                      setState(() {});
-                    },
-                    color: Colors.deepPurple.shade400,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 100, top: 8),
-                      itemCount: list.length,
-                      itemBuilder: (context, i) => _buildEventCard(list[i]),
-                    ),
-                  ),
-          ),
-        ],
-      ),
-      floatingActionButton: ScaleTransition(
-        scale: _fabAnimation,
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.deepPurple.shade400, Colors.blue.shade400],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.deepPurple.shade200,
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-                spreadRadius: 2,
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () async {
+                          setState(() {});
+                        },
+                        color: themeProvider.isDarkMode
+                            ? const Color(0xFF6C757D)
+                            : Colors.deepPurple.shade400,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 100, top: 8),
+                          itemCount: list.length,
+                          itemBuilder: (context, i) =>
+                              _buildEventCard(list[i], themeProvider),
+                        ),
+                      ),
               ),
             ],
           ),
-          child: FloatingActionButton.extended(
-            onPressed: () => _showCreateOrEditDialog(),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            icon: const Icon(Icons.add, color: Colors.white, size: 24),
-            label: const Text(
-              'Crear Evento',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+          floatingActionButton: ScaleTransition(
+            scale: _fabAnimation,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: themeProvider.isDarkMode
+                    ? LinearGradient(
+                        colors: themeProvider.backgroundGradientColors
+                            .take(2)
+                            .toList(),
+                      )
+                    : LinearGradient(
+                        colors: [
+                          Colors.deepPurple.shade400,
+                          Colors.blue.shade400,
+                        ],
+                      ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: themeProvider.isDarkMode
+                        ? themeProvider.cardBorderColor.withOpacity(0.3)
+                        : Colors.deepPurple.shade200,
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: FloatingActionButton.extended(
+                onPressed: () => _showCreateOrEditDialog(),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                icon: const Icon(Icons.add, color: Colors.white, size: 24),
+                label: const Text(
+                  'Crear Evento',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -10,6 +10,10 @@ import 'services/notification_service.dart';
 // Modelo y Provider
 import 'models/evento.dart';
 import 'providers/event_provider.dart';
+import 'providers/theme_provider.dart'; // ✨ NUEVO: Import del ThemeProvider
+
+// ✨ AGREGAR: Import del AuthService
+import 'auth/auth_service.dart';
 
 // Pantallas
 import 'screens/home_screen.dart';
@@ -17,6 +21,8 @@ import 'screens/calendar_screen.dart';
 import 'screens/events_screen.dart';
 import 'screens/world_screen.dart';
 import 'screens/settings_screen.dart';
+// ✨ AGREGAR: Import de la pantalla de login
+import 'auth/login_screen.dart';
 
 void main() async {
   // Asegurar que los widgets estén inicializados
@@ -46,16 +52,68 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        // ✨ NUEVO: ThemeProvider como primer provider
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        // ✨ AGREGAR: AuthService como segundo provider
+        ChangeNotifierProvider(
+          create: (_) => AuthService(), // Se inicializa automáticamente
+        ),
         ChangeNotifierProvider(
           create: (_) => EventProvider()..listenToUserChanges(),
         ),
       ],
-      child: MaterialApp(
-        title: 'Agenda Dinámica',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-        home: const FirebaseLoadingScreen(),
+      // ✨ NUEVO: Consumer para usar el tema dinámico
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            title: 'Agenda Dinámica',
+            debugShowCheckedModeBanner: false,
+            theme: themeProvider.lightTheme,
+            darkTheme: themeProvider.darkTheme,
+            themeMode: themeProvider.isDarkMode
+                ? ThemeMode.dark
+                : ThemeMode.light,
+            // ✨ CAMBIO: Usar AuthWrapper en lugar de FirebaseLoadingScreen
+            home: const AuthWrapper(),
+          );
+        },
       ),
+    );
+  }
+}
+
+// ✨ NUEVO: Wrapper que maneja el flujo de autenticación
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthService>(
+      builder: (context, authService, child) {
+        // Si está cargando la verificación de autenticación
+        if (authService.isLoading) {
+          return const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Verificando sesión...'),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Si NO está autenticado -> Ir a Login
+        if (!authService.isAuthenticated) {
+          return const LoginScreen(); // Tu pantalla de login existente
+        }
+
+        // Si SÍ está autenticado -> Ir a FirebaseLoadingScreen (tu flujo normal)
+        return const FirebaseLoadingScreen();
+      },
     );
   }
 }
@@ -89,10 +147,8 @@ class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
           _statusMessage = 'Conectado exitosamente';
         });
 
-        // Cargar eventos desde Firebase
-        if (mounted) {
-          await context.read<EventProvider>().loadEvents();
-        }
+        // ✨ ELIMINADO: NO cargar eventos aquí porque listenToEvents() lo hace automáticamente
+        // await context.read<EventProvider>().loadEvents(); // ← LÍNEA ELIMINADA
 
         // Esperar un poco antes de navegar
         await Future.delayed(const Duration(seconds: 1));
@@ -174,6 +230,7 @@ class _MainScreenState extends State<MainScreen> {
     // 🔥 NUEVA FUNCIONALIDAD: Sincronización en tiempo real automática
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final eventProvider = context.read<EventProvider>();
+      // ✨ Solo usar listenToEvents() - esto carga Y escucha cambios automáticamente
       eventProvider.listenToEvents();
 
       // 🔔 Verificar notificaciones pendientes periódicamente
@@ -383,6 +440,8 @@ class _MainScreenState extends State<MainScreen> {
       ),
 
       const WorldScreen(),
+
+      // ✨ CORREGIDO: Usar tu SettingsScreen separado sin parámetros
       const SettingsScreen(),
     ];
   }
