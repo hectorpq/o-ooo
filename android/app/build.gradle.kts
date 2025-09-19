@@ -35,6 +35,9 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            // ↓ AGREGAR ESTAS DOS LÍNEAS ↓
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
@@ -48,5 +51,4 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.14.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-messaging")
-
 }
