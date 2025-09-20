@@ -2,33 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 
 class WorldScreen extends StatelessWidget {
   const WorldScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("🌍 Noticias del Mundo"),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        // Agregamos el botón de favoritos en el AppBar principal
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.favorite, color: Colors.red),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const FavoritesScreen(),
-                ),
-              );
-            },
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text("🌍 Noticias del Mundo"),
+            centerTitle: true,
+            foregroundColor: Colors.white,
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                gradient: themeProvider.isDarkMode
+                    ? LinearGradient(
+                        colors: themeProvider.backgroundGradientColors,
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : LinearGradient(
+                        colors: [
+                          Colors.deepPurple.shade400,
+                          Colors.blue.shade400,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+              ),
+            ),
           ),
-        ],
-      ),
-      body: const NewsPage(),
+          body: const NewsPage(),
+        );
+      },
     );
   }
 }
@@ -257,15 +267,15 @@ class _NewsPageState extends State<NewsPage> {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            IconButton(
-                              icon: Icon(
-                                isFavorite(article)
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: Colors.red,
-                              ),
-                              onPressed: () => toggleFavorite(article),
-                            ),
+                            // IconButton(
+                            //   icon: Icon(
+                            //     isFavorite(article)
+                            //         ? Icons.favorite
+                            //         : Icons.favorite_border,
+                            //     color: Colors.red,
+                            //   ),
+                            //   onPressed: () => toggleFavorite(article),
+                            // ),
                           ],
                         ),
                       ],
@@ -410,10 +420,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             ),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => removeFavorite(article),
-                        ),
+                        // IconButton(
+                        //   icon: const Icon(Icons.delete, color: Colors.red),
+                        //   onPressed: () => removeFavorite(article),
+                        // ),
                       ],
                     ),
                   ),
