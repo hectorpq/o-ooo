@@ -6,7 +6,7 @@
     android:targetCellHeight="2"
     android:maxResizeWidth="300dp"
     android:maxResizeHeight="200dp"
-    android:updatePeriodMillis="1800000"
+    android:updatePeriodMillis="300000"
     android:initialLayout="@layout/horario_widget"
     android:description="@string/agenda_widget_description"
     android:resizeMode="horizontal|vertical"
