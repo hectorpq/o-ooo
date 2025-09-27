@@ -1,4 +1,4 @@
-// lib/main.dart - SOLUCIÓN FINAL CORREGIDA
+// lib/main.dart - SOLUCIÓN FINAL CORREGIDA + WIDGET
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +6,8 @@ import 'firebase_options.dart';
 
 // Servicio de notificaciones
 import 'services/notification_service.dart';
+// NUEVO: Servicio de widgets
+import 'services/widget_service.dart';
 
 // Modelo y Provider
 import 'models/evento.dart';
@@ -41,6 +43,9 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     print('✅ Firebase inicializado correctamente');
+
+    // NUEVO: Inicializar servicio de widgets
+    await WidgetService.initialize();
 
     // Inicializar servicio de notificaciones
     await NotificationService.initialize();
@@ -138,8 +143,7 @@ class FirebaseLoadingScreen extends StatefulWidget {
 class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
   bool _isFirebaseReady = false;
   String _statusMessage = 'Conectando con Firebase...';
-  bool _isDisposed =
-      false; // ✅ AGREGAR: Flag para evitar setState después de dispose
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -149,11 +153,10 @@ class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
 
   @override
   void dispose() {
-    _isDisposed = true; // ✅ AGREGAR: Marcar como disposed
+    _isDisposed = true;
     super.dispose();
   }
 
-  // ✅ FUNCIÓN SEGURA PARA setState
   void _safeSetState(VoidCallback fn) {
     if (!_isDisposed && mounted) {
       setState(fn);
@@ -162,10 +165,9 @@ class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
 
   Future<void> _checkFirebaseConnection() async {
     try {
-      // Verificar si Firebase está inicializado
       await Future.delayed(const Duration(seconds: 1));
 
-      if (_isDisposed) return; // ✅ VERIFICAR: No continuar si está disposed
+      if (_isDisposed) return;
 
       if (Firebase.apps.isNotEmpty) {
         _safeSetState(() {
@@ -173,12 +175,10 @@ class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
           _statusMessage = 'Conectado exitosamente';
         });
 
-        // Inicializar HorarioProvider después de Firebase
         await _initializeHorarioProvider();
 
-        if (_isDisposed) return; // ✅ VERIFICAR: No continuar si está disposed
+        if (_isDisposed) return;
 
-        // Esperar un poco antes de navegar
         await Future.delayed(const Duration(seconds: 1));
 
         if (!_isDisposed && mounted) {
@@ -196,7 +196,6 @@ class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
         _statusMessage = 'Error de conexión: $e';
       });
 
-      // Intentar continuar sin Firebase después de un error
       await Future.delayed(const Duration(seconds: 3));
       if (!_isDisposed && mounted) {
         Navigator.of(context).pushReplacement(
@@ -206,35 +205,35 @@ class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
     }
   }
 
-  // Inicializar HorarioProvider de forma segura
   Future<void> _initializeHorarioProvider() async {
-    if (_isDisposed || !mounted)
-      return; // ✅ VERIFICAR: No continuar si está disposed
+    if (_isDisposed || !mounted) return;
 
     try {
-      // ✅ LÍNEA 177: Usar _safeSetState para evitar el error
       _safeSetState(() {
         _statusMessage = 'Inicializando horarios...';
       });
 
-      // Esperar un frame para asegurar que el widget sigue montado
       await Future.delayed(const Duration(milliseconds: 100));
 
       if (!_isDisposed && mounted) {
         final horarioProvider = context.read<HorarioProvider>();
 
-        // Inicializar en un try-catch separado para manejar errores del índice
         try {
           await horarioProvider.inicializar();
           print('✅ HorarioProvider inicializado');
+
+          // NUEVO: Actualizar widget después de inicializar horarios
+          try {
+            await WidgetService.updateWidget(horarioProvider: horarioProvider);
+          } catch (widgetError) {
+            print('⚠️ Error al actualizar widget inicial: $widgetError');
+          }
         } catch (indexError) {
           print('⚠️ Error de índice en horarios (continuando): $indexError');
-          // No bloquear - continuar sin horarios
         }
       }
     } catch (e) {
       print('⚠️ Error al inicializar horarios: $e');
-      // ✅ ASEGURAR que _safeSetState se use aquí también
       if (!_isDisposed && mounted) {
         _safeSetState(() {
           _statusMessage = 'Continuando sin horarios...';
@@ -286,8 +285,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  bool _isDisposed =
-      false; // ✅ AGREGAR: Flag para evitar setState después de dispose
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -299,20 +297,53 @@ class _MainScreenState extends State<MainScreen> {
         final eventProvider = context.read<EventProvider>();
         eventProvider.listenToEvents();
         _startNotificationChecker();
+
+        // NUEVO: Configurar actualizaciones del widget
+        _setupWidgetUpdates();
       }
     });
   }
 
   @override
   void dispose() {
-    _isDisposed = true; // ✅ AGREGAR: Marcar como disposed
+    _isDisposed = true;
     super.dispose();
   }
 
-  // ✅ FUNCIÓN SEGURA PARA setState
   void _safeSetState(VoidCallback fn) {
     if (!_isDisposed && mounted) {
       setState(fn);
+    }
+  }
+
+  // NUEVO: Configurar actualizaciones del widget
+  void _setupWidgetUpdates() async {
+    try {
+      // Programar actualizaciones periódicas
+      await WidgetService.schedulePeriodicUpdates();
+
+      // Escuchar cambios en horarios
+      final horarioProvider = context.read<HorarioProvider>();
+      horarioProvider.addListener(_updateHomeWidget);
+
+      // Actualización inicial
+      _updateHomeWidget();
+
+      print('✅ Widget updates configuradas');
+    } catch (e) {
+      print('⚠️ Error configurando widget updates: $e');
+    }
+  }
+
+  // NUEVO: Actualizar widget cuando cambien los datos
+  void _updateHomeWidget() async {
+    if (_isDisposed || !mounted) return;
+
+    try {
+      final horarioProvider = context.read<HorarioProvider>();
+      await WidgetService.updateWidget(horarioProvider: horarioProvider);
+    } catch (e) {
+      print('⚠️ Error actualizando widget: $e');
     }
   }
 
@@ -328,7 +359,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _startNotificationChecker() {
-    if (_isDisposed) return; // ✅ VERIFICAR: No iniciar si está disposed
+    if (_isDisposed) return;
 
     Stream.periodic(const Duration(minutes: 5)).listen((_) async {
       if (!_isDisposed && mounted) {
@@ -339,7 +370,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _addEvento(Evento evento) async {
-    if (_isDisposed) return; // ✅ VERIFICAR
+    if (_isDisposed) return;
 
     try {
       await context.read<EventProvider>().addEvent(evento);
@@ -354,7 +385,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _editEvento(int index, Evento eventoEditado) async {
-    if (_isDisposed) return; // ✅ VERIFICAR
+    if (_isDisposed) return;
 
     try {
       final eventProvider = context.read<EventProvider>();
@@ -371,7 +402,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _deleteEvento(int index) async {
-    if (_isDisposed) return; // ✅ VERIFICAR
+    if (_isDisposed) return;
 
     try {
       final eventProvider = context.read<EventProvider>();
@@ -389,7 +420,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _toggleEventNotification(String eventoId) async {
-    if (_isDisposed) return; // ✅ VERIFICAR
+    if (_isDisposed) return;
 
     try {
       await context.read<EventProvider>().toggleNotificacion(eventoId);
@@ -404,7 +435,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _updateNotificationTime(String eventoId, int minutes) async {
-    if (_isDisposed) return; // ✅ VERIFICAR
+    if (_isDisposed) return;
 
     try {
       await context.read<EventProvider>().updateMinutosAntes(eventoId, minutes);
@@ -421,7 +452,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showSuccessSnackBar(String message) {
-    if (_isDisposed || !mounted) return; // ✅ VERIFICAR
+    if (_isDisposed || !mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -441,7 +472,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showErrorSnackBar(String message) {
-    if (_isDisposed || !mounted) return; // ✅ VERIFICAR
+    if (_isDisposed || !mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

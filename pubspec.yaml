@@ -1,6 +1,6 @@
 name: agenda_ai
 description: "A new Flutter project."
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: 'none'
 
 version: 1.0.0+1
 
@@ -26,24 +26,27 @@ dependencies:
   audioplayers: ^6.0.0
   timezone: ^0.9.4
 
-  speech_to_text: ^7.3.0   # 🔥 actualizado, compatible con Flutter moderno
-  shared_preferences: ^2.2.2  # Guardar tema
-  flutter_colorpicker: ^1.0.3  # Selector de colores para categorías
+  speech_to_text: ^7.3.0
+  shared_preferences: ^2.2.2
+  flutter_colorpicker: ^1.0.3
   intl: ^0.20.2
+
+  # SOLO NECESITAS ESTO PARA EL WIDGET:
+  home_widget: ^0.6.0
+  # workmanager: ^0.5.2  # ELIMINADO - causa conflictos
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.13.1   # 👈 añadimos este paquete
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
-
   assets:
-    - assets/logo.png   # 👈 tu logo dentro de la app
+    - assets/logo.png
 
-flutter_icons:            # 👈 configuración del ícono de la app
+flutter_icons:
   android: true
   ios: true
   image_path: "assets/logo.png"
