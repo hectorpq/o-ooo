@@ -15,4 +15,7 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+    <string name="app_name">agenda_ai</string>
+    <string name="agenda_widget_description">Muestra tu agenda y eventos próximos</string>
 </resources>

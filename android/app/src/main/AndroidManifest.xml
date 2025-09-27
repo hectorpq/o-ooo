@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.agenda_ai">
 
@@ -62,7 +63,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Receiver para el widget -->
+        <!-- Receiver para el widget de horario -->
         <receiver 
             android:name=".HorarioWidgetProvider"
             android:exported="true">

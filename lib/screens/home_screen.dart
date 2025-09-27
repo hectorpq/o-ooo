@@ -9,6 +9,7 @@ import '../providers/theme_provider.dart';
 import '../providers/horario_provider.dart';
 import '../widgets/dialogo_crear_horario.dart';
 import '../widgets/dialogo_agregar_materia.dart';
+import '../services/widget_service.dart'; // AGREGADO
 
 typedef VoidCallbackInt = void Function(int index);
 
@@ -138,18 +139,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  // MÉTODO AGREGADO: Actualizar widget cuando cambien los datos
+  void _actualizarWidget() async {
+    try {
+      final horarioProvider = context.read<HorarioProvider>();
+      await WidgetService.updateWidget(
+        horarioProvider: horarioProvider,
+        eventos: widget.eventos,
+      );
+      print('Widget actualizado desde HomeScreen');
+    } catch (e) {
+      print('Error actualizando widget desde HomeScreen: $e');
+    }
+  }
+
   void _mostrarDialogoCrearHorario() {
     showDialog(
       context: context,
       builder: (context) => const DialogoCrearHorario(),
-    );
+    ).then((_) {
+      // Actualizar widget después de crear horario
+      _actualizarWidget();
+    });
   }
 
   void _mostrarDialogoAgregarMateria(String dia, String hora) {
     showDialog(
       context: context,
       builder: (context) => DialogoAgregarMateria(dia: dia, hora: hora),
-    );
+    ).then((_) {
+      // Actualizar widget después de agregar materia
+      _actualizarWidget();
+    });
   }
 
   void _confirmarLimpiarHorario(HorarioProvider horarioProvider) {
@@ -185,7 +206,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 onPressed: () async {
                   Navigator.pop(context);
                   final success = await horarioProvider.limpiarHorario();
-                  if (!success && mounted) {
+                  if (success) {
+                    // AGREGADO: Actualizar widget después de limpiar
+                    _actualizarWidget();
+                  } else if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Error: ${horarioProvider.error}'),
@@ -528,7 +552,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
 
-                  // Horario Grid
+                  // Horario Grid (manteniendo todo el código existente)
                   Expanded(
                     child: Container(
                       margin: const EdgeInsets.all(16),
@@ -972,6 +996,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                                           hora:
                                                                               hora,
                                                                         );
+                                                                    // AGREGADO: Actualizar widget después de eliminar materia
+                                                                    _actualizarWidget();
                                                                   }
                                                                 }
                                                               : null,
@@ -1128,7 +1154,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          // BOTÓN FLOTANTE BLANCO CORREGIDO
+          // BOTÓN FLOTANTE
           floatingActionButton: FloatingActionButton(
             heroTag: 'home_fab',
             backgroundColor: Colors.white,

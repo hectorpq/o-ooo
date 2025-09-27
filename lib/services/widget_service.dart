@@ -10,15 +10,29 @@ class WidgetService {
     'com.example.appmobilav/widget',
   );
 
+  // Flag para controlar si el widget está disponible
+  static bool _isWidgetAvailable = false;
+
   /// Inicializar el servicio de widgets
   static Future<void> initialize() async {
     try {
       print('🔧 Inicializando WidgetService...');
-      await _channel.invokeMethod('initialize');
-      print('✅ WidgetService inicializado correctamente');
+
+      // Intentar inicializar solo si el canal está disponible
+      try {
+        await _channel.invokeMethod('initialize');
+        _isWidgetAvailable = true;
+        print('✅ WidgetService inicializado correctamente');
+      } on MissingPluginException {
+        _isWidgetAvailable = false;
+        print('ℹ️ Widget nativo no implementado - funcionando sin widget');
+      } on PlatformException catch (e) {
+        _isWidgetAvailable = false;
+        print('⚠️ Error de plataforma en widget: $e');
+      }
     } catch (e) {
+      _isWidgetAvailable = false;
       print('⚠️ Error inicializando WidgetService: $e');
-      // No lanzar error para no interrumpir la app
     }
   }
 
@@ -27,6 +41,12 @@ class WidgetService {
     HorarioProvider? horarioProvider,
     List<Evento>? eventos,
   }) async {
+    // Si el widget no está disponible, no hacer nada
+    if (!_isWidgetAvailable) {
+      print('ℹ️ Widget no disponible - saltando actualización');
+      return;
+    }
+
     try {
       print('🔄 Actualizando widget...');
 
@@ -40,14 +60,22 @@ class WidgetService {
       await _channel.invokeMethod('updateWidget', widgetData);
 
       print('✅ Widget actualizado correctamente');
+    } on MissingPluginException {
+      _isWidgetAvailable = false;
+      print('ℹ️ Widget no implementado - deshabilitando actualizaciones');
     } catch (e) {
       print('⚠️ Error actualizando widget: $e');
-      // No lanzar error para no interrumpir la app
     }
   }
 
   /// Programar actualizaciones periódicas del widget
   static Future<void> schedulePeriodicUpdates() async {
+    // Si el widget no está disponible, no hacer nada
+    if (!_isWidgetAvailable) {
+      print('ℹ️ Widget no disponible - saltando programación periódica');
+      return;
+    }
+
     try {
       print('⏰ Programando actualizaciones periódicas del widget...');
 
@@ -56,25 +84,36 @@ class WidgetService {
       });
 
       print('✅ Actualizaciones periódicas programadas');
+    } on MissingPluginException {
+      _isWidgetAvailable = false;
+      print(
+        'ℹ️ Widget no implementado - no se pueden programar actualizaciones',
+      );
     } catch (e) {
-      print('⚠️ Error programando actualizaciones: $e');
+      print('! Error programando actualizaciones: $e');
     }
   }
 
   /// Limpiar el widget (cuando se cierre sesión)
   static Future<void> clearWidget() async {
+    if (!_isWidgetAvailable) {
+      print('ℹ️ Widget no disponible - no necesita limpieza');
+      return;
+    }
+
     try {
       print('🧹 Limpiando widget...');
-
       await _channel.invokeMethod('clearWidget');
-
       print('✅ Widget limpiado');
+    } on MissingPluginException {
+      _isWidgetAvailable = false;
+      print('ℹ️ Widget no implementado - no necesita limpieza');
     } catch (e) {
       print('⚠️ Error limpiando widget: $e');
     }
   }
 
-  /// Preparar los datos que se enviarán al widget
+  /// Preparar los datos que se enviarían al widget (VERSIÓN CORREGIDA)
   static Future<Map<String, dynamic>> _prepareWidgetData({
     HorarioProvider? horarioProvider,
     List<Evento>? eventos,
@@ -82,24 +121,46 @@ class WidgetService {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // Información básica
+    // Información básica que espera el widget de Android
     final widgetData = <String, dynamic>{
+      'eventsToday': 0,
+      'nextEventToday': '',
+      'nextEventTodayTime': '',
+      'scheduleStatus': 'Sin clases',
+      'currentSubject': '',
       'lastUpdate': now.millisecondsSinceEpoch,
-      'currentTime': _formatTime(now),
-      'currentDate': _formatDate(now),
-      'dayOfWeek': _getDayOfWeek(now.weekday),
     };
 
     // Agregar información de horarios si está disponible
-    if (horarioProvider != null) {
-      widgetData.addAll(await _getHorarioData(horarioProvider, now));
+    if (horarioProvider != null && horarioProvider.tieneHorarioActivo) {
+      final horarioData = await _getHorarioData(horarioProvider, now);
+
+      // Mapear a los nombres que espera Android
+      widgetData['scheduleStatus'] =
+          horarioData['scheduleStatus'] ?? 'Sin clases';
+      widgetData['currentSubject'] = horarioData['currentSubject'] ?? '';
+
+      print(
+        'Datos de horario para widget: ${horarioData['scheduleStatus']}, ${horarioData['currentSubject']}',
+      );
     }
 
-    // Agregar eventos próximos si están disponibles
+    // Agregar eventos de hoy si están disponibles
     if (eventos != null && eventos.isNotEmpty) {
-      widgetData.addAll(_getEventosData(eventos, today));
+      final eventosData = _getEventosData(eventos, today);
+
+      // Mapear a los nombres que espera Android
+      widgetData['eventsToday'] = eventosData['eventsToday'] ?? 0;
+      widgetData['nextEventToday'] = eventosData['nextEventToday'] ?? '';
+      widgetData['nextEventTodayTime'] =
+          eventosData['nextEventTodayTime'] ?? '';
+
+      print(
+        'Datos de eventos para widget: ${eventosData['eventsToday']} eventos, próximo: ${eventosData['nextEventToday']}',
+      );
     }
 
+    print('Datos finales enviados al widget: $widgetData');
     return widgetData;
   }
 
@@ -127,7 +188,7 @@ class WidgetService {
         horaActual,
       );
 
-      // Buscar próxima materia (esto requeriría lógica adicional)
+      // Buscar próxima materia
       final proximaMateria = _buscarProximaMateria(horarioProvider, now);
 
       return {
@@ -149,9 +210,8 @@ class WidgetService {
       };
     } catch (e) {
       print('⚠️ Error obteniendo datos de horario: $e');
+      return {'hasSchedule': false, 'scheduleStatus': 'Error en horario'};
     }
-
-    return {'hasSchedule': false, 'scheduleStatus': 'Sin clases hoy'};
   }
 
   /// Obtener datos de eventos
@@ -160,7 +220,7 @@ class WidgetService {
     DateTime today,
   ) {
     try {
-      // Filtrar eventos de hoy y próximos
+      // Filtrar eventos de hoy
       final eventosHoy = eventos.where((evento) {
         final eventDate = DateTime(
           evento.fecha.year,
@@ -225,6 +285,13 @@ class WidgetService {
       return 'Próxima: ${proximaMateria.nombre}';
     } else {
       final hour = now.hour;
+      final weekday = now.weekday;
+
+      // Si es fin de semana
+      if (weekday == 6 || weekday == 7) {
+        return 'Fin de semana';
+      }
+
       if (hour < 7) {
         return 'Muy temprano';
       } else if (hour > 22) {
@@ -249,26 +316,33 @@ class WidgetService {
     return dias[weekday - 1];
   }
 
-  /// Convertir hora actual a slot de horario (aproximado)
+  /// Convertir hora actual a slot de horario
   static String _getHoraSlot(DateTime now) {
     final hour = now.hour;
-    // Mapear a slots típicos de horario escolar
-    if (hour >= 7 && hour < 8) return '07:00';
-    if (hour >= 8 && hour < 9) return '08:00';
-    if (hour >= 9 && hour < 10) return '09:00';
-    if (hour >= 10 && hour < 11) return '10:00';
-    if (hour >= 11 && hour < 12) return '11:00';
-    if (hour >= 12 && hour < 13) return '12:00';
-    if (hour >= 13 && hour < 14) return '13:00';
-    if (hour >= 14 && hour < 15) return '14:00';
-    if (hour >= 15 && hour < 16) return '15:00';
-    if (hour >= 16 && hour < 17) return '16:00';
-    if (hour >= 17 && hour < 18) return '17:00';
-    if (hour >= 18 && hour < 19) return '18:00';
-    return '${hour.toString().padLeft(2, '0')}:00';
+    final minute = now.minute;
+
+    // Mapear a slots típicos según la hora actual
+    if (hour >= 7 && hour < 8) return '7:30 - 8:20 (M1)';
+    if (hour >= 8 && hour < 9) return '8:25 - 9:15 (M2)';
+    if (hour >= 9 && hour < 10) return '9:20 - 10:10 (M3)';
+    if (hour >= 10 && hour < 11) return '10:15 - 11:05 (M4)';
+    if (hour >= 11 && hour < 12) return '11:15 - 12:05 (M5)';
+    if (hour >= 12 && hour < 13) return '12:10 - 13:00 (M6)';
+    if (hour >= 13 && hour < 14) return '13:10 - 14:00 (T1)';
+    if (hour >= 14 && hour < 15) return '14:05 - 14:55 (T2)';
+    if (hour >= 15 && hour < 16) return '15:00 - 15:50 (T3)';
+    if (hour >= 16 && hour < 17) return '16:00 - 16:50 (T4)';
+    if (hour >= 17 && hour < 18) return '16:55 - 17:45 (T5)';
+    if (hour >= 18 && hour < 19) return '17:50 - 18:40 (T6)';
+    if (hour >= 19 && hour < 20) return '18:45 - 19:35 (N1)';
+    if (hour >= 20 && hour < 21) return '19:40 - 20:30 (N2)';
+    if (hour >= 21 && hour < 22) return '20:35 - 21:25 (N3)';
+    if (hour >= 22 && hour < 23) return '21:30 - 22:20 (N4)';
+
+    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
   }
 
-  /// Buscar próxima materia (simplificado)
+  /// Buscar próxima materia
   static Materia? _buscarProximaMateria(
     HorarioProvider provider,
     DateTime now,
@@ -276,14 +350,38 @@ class WidgetService {
     if (!provider.tieneHorarioActivo) return null;
 
     try {
-      final dia = _getDiaSemana(now.weekday);
+      final horario = provider.horarioActivo!;
+      final diaActual = _getDiaSemana(now.weekday);
       final horaActual = now.hour;
 
-      // Buscar en las próximas horas del día
-      for (int hora = horaActual + 1; hora <= 18; hora++) {
-        final slot = '${hora.toString().padLeft(2, '0')}:00';
-        final materia = provider.obtenerMateria(dia, slot);
-        if (materia != null) return materia;
+      // Lista de horarios universitarios en orden
+      final horariosUniversitarios = [
+        '7:30 - 8:20 (M1)',
+        '8:25 - 9:15 (M2)',
+        '9:20 - 10:10 (M3)',
+        '10:15 - 11:05 (M4)',
+        '11:15 - 12:05 (M5)',
+        '12:10 - 13:00 (M6)',
+        '13:10 - 14:00 (T1)',
+        '14:05 - 14:55 (T2)',
+        '15:00 - 15:50 (T3)',
+        '16:00 - 16:50 (T4)',
+        '16:55 - 17:45 (T5)',
+        '17:50 - 18:40 (T6)',
+        '18:45 - 19:35 (N1)',
+        '19:40 - 20:30 (N2)',
+        '20:35 - 21:25 (N3)',
+        '21:30 - 22:20 (N4)',
+      ];
+
+      // Buscar próximas materias hoy
+      for (final horarioSlot in horariosUniversitarios) {
+        // Obtener la hora de inicio del slot
+        final horaInicio = _extraerHoraInicio(horarioSlot);
+        if (horaInicio > horaActual) {
+          final materia = provider.obtenerMateria(diaActual, horarioSlot);
+          if (materia != null) return materia;
+        }
       }
 
       return null;
@@ -293,37 +391,33 @@ class WidgetService {
     }
   }
 
+  /// Extraer hora de inicio de un slot
+  static int _extraerHoraInicio(String slot) {
+    try {
+      final partes = slot.split(' - ');
+      if (partes.isNotEmpty) {
+        final horaPartes = partes[0].split(':');
+        if (horaPartes.isNotEmpty) {
+          return int.parse(horaPartes[0]);
+        }
+      }
+    } catch (e) {
+      print('Error extrayendo hora de $slot: $e');
+    }
+    return 0;
+  }
+
   /// Contar clases de hoy
   static int _contarClasesHoy(HorarioProvider provider, DateTime now) {
     if (!provider.tieneHorarioActivo) return 0;
 
     try {
       final dia = _getDiaSemana(now.weekday);
-      int contador = 0;
+      final horario = provider.horarioActivo!;
 
-      // Verificar slots típicos del día
-      final horas = [
-        '07:00',
-        '08:00',
-        '09:00',
-        '10:00',
-        '11:00',
-        '12:00',
-        '13:00',
-        '14:00',
-        '15:00',
-        '16:00',
-        '17:00',
-        '18:00',
-      ];
-
-      for (final hora in horas) {
-        if (provider.tieneMateria(dia, hora)) {
-          contador++;
-        }
-      }
-
-      return contador;
+      return horario.slots
+          .where((slot) => slot.dia == dia && slot.materiaId != null)
+          .length;
     } catch (e) {
       print('Error contando clases: $e');
       return 0;
@@ -336,11 +430,26 @@ class WidgetService {
     HorarioProvider provider,
     DateTime now,
   ) {
-    // Esta función requeriría más lógica para determinar exactamente cuándo es la próxima clase
-    // Por simplicidad, retornamos una aproximación
-    final horaActual = now.hour;
-    final proximaHora = horaActual + 1;
-    return '${proximaHora.toString().padLeft(2, '0')}:00';
+    // Buscar el slot de la próxima materia
+    try {
+      final horario = provider.horarioActivo!;
+      final dia = _getDiaSemana(now.weekday);
+
+      final slot = horario.slots.firstWhere(
+        (s) => s.dia == dia && s.materiaId == proximaMateria.id,
+        orElse: () => SlotHorario(dia: dia, hora: ''),
+      );
+
+      if (slot.hora.isNotEmpty) {
+        // Extraer solo la hora de inicio
+        final partes = slot.hora.split(' - ');
+        return partes.isNotEmpty ? partes[0] : '';
+      }
+    } catch (e) {
+      print('Error obteniendo hora de próxima materia: $e');
+    }
+
+    return 'Próximamente';
   }
 
   /// Formatear tiempo a 12 horas
@@ -353,11 +462,9 @@ class WidgetService {
     return '${displayHour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
   }
 
-  /// Formatear tiempo a 24 horas (removido - no se usa más)
-
   /// Formatear fecha
   static String _formatDate(DateTime date) {
-    final months = [
+    const months = [
       'Ene',
       'Feb',
       'Mar',
@@ -389,17 +496,17 @@ class WidgetService {
     return days[weekday - 1];
   }
 
-  /// Método para manejar clics desde el widget
+  /// Configurar manejador de clics del widget
   static void setupWidgetClickHandler() {
+    if (!_isWidgetAvailable) return;
+
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'widgetClicked':
           print('📱 Widget clickeado - abriendo app');
-          // Aquí podrías navegar a una pantalla específica
           break;
         case 'refreshRequested':
           print('🔄 Actualización solicitada desde widget');
-          // Aquí podrías forzar una actualización
           break;
         default:
           print('⚠️ Método desconocido desde widget: ${call.method}');
@@ -407,25 +514,23 @@ class WidgetService {
     });
   }
 
-  /// Verificar si los widgets están soportados en este dispositivo
+  /// Verificar si los widgets están soportados
   static Future<bool> isWidgetSupported() async {
-    try {
-      final result = await _channel.invokeMethod('isSupported');
-      return result as bool? ?? false;
-    } catch (e) {
-      print('⚠️ Error verificando soporte de widgets: $e');
-      return false;
-    }
+    return _isWidgetAvailable;
   }
 
   /// Obtener información del widget
   static Future<Map<String, dynamic>?> getWidgetInfo() async {
+    if (!_isWidgetAvailable) {
+      return {'available': false, 'reason': 'Widget no implementado'};
+    }
+
     try {
       final result = await _channel.invokeMethod('getWidgetInfo');
       return Map<String, dynamic>.from(result as Map);
     } catch (e) {
       print('⚠️ Error obteniendo info del widget: $e');
-      return null;
+      return {'available': false, 'error': e.toString()};
     }
   }
 
@@ -436,5 +541,14 @@ class WidgetService {
   }) async {
     print('⚡ Forzando actualización del widget...');
     await updateWidget(horarioProvider: horarioProvider, eventos: eventos);
+  }
+
+  /// Obtener estado actual del servicio
+  static Map<String, dynamic> getServiceStatus() {
+    return {
+      'isAvailable': _isWidgetAvailable,
+      'channelName': 'com.example.appmobilav/widget',
+      'status': _isWidgetAvailable ? 'Conectado' : 'No disponible',
+    };
   }
 }

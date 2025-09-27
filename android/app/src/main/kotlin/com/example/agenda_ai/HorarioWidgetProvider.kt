@@ -3,15 +3,48 @@ package com.example.agenda_ai
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.content.SharedPreferences
 import android.widget.RemoteViews
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.dart.DartExecutor
-import io.flutter.plugin.common.MethodChannel
+import android.app.PendingIntent
+import android.content.Intent
+import java.text.SimpleDateFormat
+import java.util.*
 
 class HorarioWidgetProvider : AppWidgetProvider() {
-
+    
     companion object {
-        private const val CHANNEL = "com.example.appmobilav/widget"
+        private const val PREFS_NAME = "horario_widget_prefs"
+        private const val PREF_EVENTS_TODAY = "events_today"
+        private const val PREF_NEXT_EVENT = "next_event"
+        private const val PREF_NEXT_EVENT_TIME = "next_event_time"
+        private const val PREF_SCHEDULE_STATUS = "schedule_status"
+        private const val PREF_CURRENT_SUBJECT = "current_subject"
+        private const val PREF_LAST_UPDATE = "last_update"
+
+        // Método estático para actualizar desde Flutter
+        fun updateFromFlutter(context: Context, widgetData: Map<String, Any>) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val editor = prefs.edit()
+
+            // Guardar datos
+            editor.putInt(PREF_EVENTS_TODAY, widgetData["eventsToday"] as? Int ?: 0)
+            editor.putString(PREF_NEXT_EVENT, widgetData["nextEventToday"] as? String ?: "")
+            editor.putString(PREF_NEXT_EVENT_TIME, widgetData["nextEventTodayTime"] as? String ?: "")
+            editor.putString(PREF_SCHEDULE_STATUS, widgetData["scheduleStatus"] as? String ?: "Sin clases")
+            editor.putString(PREF_CURRENT_SUBJECT, widgetData["currentSubject"] as? String ?: "")
+            editor.putLong(PREF_LAST_UPDATE, System.currentTimeMillis())
+            editor.apply()
+
+            // Actualizar todos los widgets
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val widgetComponent = android.content.ComponentName(context, HorarioWidgetProvider::class.java)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(widgetComponent)
+            
+            val provider = HorarioWidgetProvider()
+            for (appWidgetId in appWidgetIds) {
+                provider.updateAppWidget(context, appWidgetManager, appWidgetId)
+            }
+        }
     }
 
     override fun onUpdate(
@@ -19,20 +52,18 @@ class HorarioWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        // Actualizar cada widget
+        // Actualizar todos los widgets
         for (appWidgetId in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId)
         }
     }
 
     override fun onEnabled(context: Context) {
-        // Widget agregado por primera vez
-        super.onEnabled(context)
+        // Widget habilitado por primera vez
     }
 
     override fun onDisabled(context: Context) {
-        // Último widget removido
-        super.onDisabled(context)
+        // Último widget deshabilitado
     }
 
     private fun updateAppWidget(
@@ -40,87 +71,51 @@ class HorarioWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int
     ) {
-        try {
-            // Crear las vistas del widget
-            val views = RemoteViews(context.packageName, R.layout.horario_widget)
-            
-            // Obtener datos desde SharedPreferences (guardados por Flutter)
-            val prefs = context.getSharedPreferences("widget_data", Context.MODE_PRIVATE)
-            
-            // Datos por defecto
-            var displayText = "Sin datos disponibles"
-            
-            // Intentar obtener datos del widget
-            val currentSubject = prefs.getString("currentSubject", "")
-            val scheduleStatus = prefs.getString("scheduleStatus", "")
-            val currentTime = prefs.getString("currentTime", "")
-            val eventsToday = prefs.getInt("eventsToday", 0)
-            val nextEventToday = prefs.getString("nextEventToday", "")
-            
-            // Construir texto para mostrar
-            displayText = when {
-                !currentSubject.isNullOrEmpty() -> {
-                    "En clase: $currentSubject"
-                }
-                !scheduleStatus.isNullOrEmpty() -> {
-                    scheduleStatus
-                }
-                eventsToday > 0 -> {
-                    if (!nextEventToday.isNullOrEmpty()) {
-                        "$eventsToday eventos hoy\nPróximo: $nextEventToday"
-                    } else {
-                        "$eventsToday eventos hoy"
-                    }
-                }
-                !currentTime.isNullOrEmpty() -> {
-                    "$currentTime\nSin actividades"
-                }
-                else -> "Sin datos disponibles"
-            }
-            
-            // Establecer el texto en el widget
-            views.setTextViewText(R.id.widget_current_subject, displayText)
-            
-            // Actualizar el widget
-            appWidgetManager.updateAppWidget(appWidgetId, views)
-            
-        } catch (e: Exception) {
-            // En caso de error, mostrar mensaje de error
-            val views = RemoteViews(context.packageName, R.layout.horario_widget)
-            views.setTextViewText(R.id.widget_current_subject, "Error: ${e.message}")
-            appWidgetManager.updateAppWidget(appWidgetId, views)
-        }
-    }
+        val views = RemoteViews(context.packageName, R.layout.horario_widget)
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // Método para actualizar widget desde Flutter
-    fun updateWidget(context: Context, data: Map<String, Any>) {
-        try {
-            val prefs = context.getSharedPreferences("widget_data", Context.MODE_PRIVATE)
-            val editor = prefs.edit()
-            
-            // Guardar datos
-            data.forEach { (key, value) ->
-                when (value) {
-                    is String -> editor.putString(key, value)
-                    is Int -> editor.putInt(key, value)
-                    is Boolean -> editor.putBoolean(key, value)
-                    is Long -> editor.putLong(key, value)
-                }
-            }
-            
-            editor.apply()
-            
-            // Forzar actualización del widget
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val thisWidget = android.content.ComponentName(context, HorarioWidgetProvider::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
-            
-            for (appWidgetId in appWidgetIds) {
-                updateAppWidget(context, appWidgetManager, appWidgetId)
-            }
-            
-        } catch (e: Exception) {
-            e.printStackTrace()
+        // Obtener datos guardados
+        val eventsToday = prefs.getInt(PREF_EVENTS_TODAY, 0)
+        val nextEvent = prefs.getString(PREF_NEXT_EVENT, "")
+        val nextEventTime = prefs.getString(PREF_NEXT_EVENT_TIME, "")
+        val scheduleStatus = prefs.getString(PREF_SCHEDULE_STATUS, "Sin clases")
+        val currentSubject = prefs.getString(PREF_CURRENT_SUBJECT, "")
+
+        // Formatear fecha y hora actual
+        val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        val currentDate = SimpleDateFormat("dd MMM", Locale.getDefault()).format(Date())
+
+        // Actualizar vistas
+        views.setTextViewText(R.id.widget_time, currentTime)
+        views.setTextViewText(R.id.widget_date, currentDate)
+        
+        // Estado principal
+        if (currentSubject?.isNotEmpty() == true) {
+            views.setTextViewText(R.id.widget_status, "En clase: $currentSubject")
+        } else if (nextEvent?.isNotEmpty() == true) {
+            views.setTextViewText(R.id.widget_status, "Próximo: $nextEvent")
+            views.setTextViewText(R.id.widget_next_time, nextEventTime ?: "")
+        } else {
+            views.setTextViewText(R.id.widget_status, scheduleStatus ?: "Sin clases")
         }
+
+        // Contador de eventos hoy
+        if (eventsToday > 0) {
+            views.setTextViewText(R.id.widget_events_count, "$eventsToday eventos hoy")
+        } else {
+            views.setTextViewText(R.id.widget_events_count, "Sin eventos hoy")
+        }
+
+        // Configurar click para abrir la app
+        val intent = Intent(context, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent, 
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.widget_container, pendingIntent)
+
+        // Actualizar el widget
+        appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 }

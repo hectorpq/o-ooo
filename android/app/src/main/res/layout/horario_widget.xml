@@ -1,17 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1976D2"
     android:orientation="vertical"
-    android:padding="8dp">
-    
-    <TextView
-        android:id="@+id/widget_current_subject"
+    android:padding="12dp"
+    android:background="@drawable/widget_background"
+    android:clickable="true">
+
+    <!-- Header con hora y fecha -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Cargando..."
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/widget_time"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="12:30"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/widget_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="27 Sep"
+            android:textColor="#B3FFFFFF"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif" />
+
+    </LinearLayout>
+
+    <!-- Estado principal -->
+    <TextView
+        android:id="@+id/widget_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Sin clases"
         android:textColor="#FFFFFF"
-        android:textSize="16sp" />
-        
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:paddingBottom="4dp"
+        android:fontFamily="sans-serif-medium"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+    <!-- Hora del próximo evento -->
+    <TextView
+        android:id="@+id/widget_next_time"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#B3FFFFFF"
+        android:textSize="12sp"
+        android:paddingBottom="8dp"
+        android:fontFamily="sans-serif"
+        android:visibility="gone" />
+
+    <!-- Contador de eventos -->
+    <TextView
+        android:id="@+id/widget_events_count"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Sin eventos hoy"
+        android:textColor="#80FFFFFF"
+        android:textSize="12sp"
+        android:fontFamily="sans-serif"
+        android:gravity="end" />
+
 </LinearLayout>
