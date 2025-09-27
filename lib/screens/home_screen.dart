@@ -1,12 +1,14 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
-import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui' as ui;
 import '../models/evento.dart';
+import '../models/horario.dart';
 import '../providers/theme_provider.dart';
+import '../providers/horario_provider.dart';
+import '../widgets/dialogo_crear_horario.dart';
+import '../widgets/dialogo_agregar_materia.dart';
 
 typedef VoidCallbackInt = void Function(int index);
 
@@ -22,18 +24,75 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String? _userName;
-  late DateTime _focusedDay;
-  DateTime? _selectedDay;
   late AnimationController _animController;
   late AnimationController _pulseController;
   late AnimationController _slideController;
 
+  // Horarios predefinidos basados en las imágenes reales
+  Map<TipoHorario, List<String>> horariosDisponibles = {
+    TipoHorario.escolar: [
+      '7:40 - 8:25',
+      '8:25 - 9:10',
+      '9:10 - 9:30', // Recreo
+      '9:30 - 10:15',
+      '10:15 - 11:05',
+      '11:05 - 11:20', // Recreo
+      '11:20 - 12:05',
+      '12:05 - 12:45',
+      '12:45 - 13:00', // Recreo
+      '13:00 - 13:45',
+      '13:45 - 14:30',
+    ],
+    TipoHorario.colegio: [
+      '7:40 - 8:25',
+      '8:25 - 9:10',
+      '9:10 - 9:30', // Recreo
+      '9:30 - 10:15',
+      '10:15 - 11:05',
+      '11:05 - 11:20', // Recreo
+      '11:20 - 12:05',
+      '12:05 - 12:45',
+      '12:45 - 13:00', // Recreo
+      '13:00 - 13:45',
+      '13:45 - 14:30',
+    ],
+    TipoHorario.universidad: [
+      '7:30 - 8:20 (M1)',
+      '8:25 - 9:15 (M2)',
+      '9:20 - 10:10 (M3)',
+      '10:15 - 11:05 (M4)',
+      '11:15 - 12:05 (M5)',
+      '12:10 - 13:00 (M6)',
+      '13:10 - 14:00 (T1)',
+      '14:05 - 14:55 (T2)',
+      '15:00 - 15:50 (T3)',
+      '16:00 - 16:50 (T4)',
+      '16:55 - 17:45 (T5)',
+      '17:50 - 18:40 (T6)',
+      '18:45 - 19:35 (N1)',
+      '19:40 - 20:30 (N2)',
+      '20:35 - 21:25 (N3)',
+      '21:30 - 22:20 (N4)',
+    ],
+  };
+
+  List<String> diasSemana = [
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+  ];
+
   @override
   void initState() {
     super.initState();
-    _focusedDay = DateTime.now();
-    _selectedDay = DateTime.now();
+    _initializeAnimations();
+    _getUserName();
+    _initializeProvider();
+  }
 
+  void _initializeAnimations() {
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -48,8 +107,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 600),
     )..forward();
+  }
 
-    // Obtener solo el nombre del usuario
+  void _getUserName() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       if (user.displayName != null && user.displayName!.isNotEmpty) {
@@ -64,6 +124,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _initializeProvider() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<HorarioProvider>().inicializar();
+    });
+  }
+
   @override
   void dispose() {
     _animController.dispose();
@@ -72,25 +138,184 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  List<Evento> _eventsForDay(DateTime day) {
-    // Todos los eventos deben tener fecha válida
-    return widget.eventos.where((ev) {
-      final d = ev.fecha;
-      return d.year == day.year && d.month == day.month && d.day == day.day;
-    }).toList();
+  void _mostrarDialogoCrearHorario() {
+    showDialog(
+      context: context,
+      builder: (context) => const DialogoCrearHorario(),
+    );
+  }
+
+  void _mostrarDialogoAgregarMateria(String dia, String hora) {
+    showDialog(
+      context: context,
+      builder: (context) => DialogoAgregarMateria(dia: dia, hora: hora),
+    );
+  }
+
+  void _confirmarLimpiarHorario(HorarioProvider horarioProvider) {
+    showDialog(
+      context: context,
+      builder: (context) => Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return AlertDialog(
+            backgroundColor: themeProvider.cardBackgroundColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text(
+              '¿Limpiar horario?',
+              style: TextStyle(
+                color: themeProvider.primaryTextColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Text(
+              'Esto eliminará todas las materias del horario actual.',
+              style: TextStyle(color: themeProvider.secondaryTextColor),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Cancelar',
+                  style: TextStyle(color: themeProvider.secondaryTextColor),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final success = await horarioProvider.limpiarHorario();
+                  if (!success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: ${horarioProvider.error}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text(
+                  'Limpiar',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  bool _esRecreo(String hora) {
+    return hora.contains('9:10 - 9:30') ||
+        hora.contains('11:05 - 11:20') ||
+        hora.contains('12:45 - 13:00');
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, child) {
-        final selected = _selectedDay ?? _focusedDay;
-        final eventosDelDia = _eventsForDay(selected);
-        final eventosHoy = _eventsForDay(DateTime.now());
-
+    return Consumer2<ThemeProvider, HorarioProvider>(
+      builder: (context, themeProvider, horarioProvider, child) {
         String? userInitial = _userName != null && _userName!.isNotEmpty
             ? _userName![0].toUpperCase()
             : null;
+
+        // Si está cargando
+        if (horarioProvider.isLoading) {
+          return Scaffold(
+            body: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: themeProvider.backgroundGradientColors,
+                  stops: const [0.0, 0.3, 0.7, 1.0],
+                ),
+              ),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        // Si no hay horario activo
+        if (!horarioProvider.tieneHorarioActivo) {
+          return Scaffold(
+            body: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: themeProvider.backgroundGradientColors,
+                  stops: const [0.0, 0.3, 0.7, 1.0],
+                ),
+              ),
+              child: SafeArea(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 80,
+                        color: themeProvider.secondaryTextColor,
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'No tienes un horario activo',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: themeProvider.primaryTextColor,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Crea tu primer horario para comenzar',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: themeProvider.secondaryTextColor,
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      ElevatedButton(
+                        onPressed: _mostrarDialogoCrearHorario,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: themeProvider.isDarkMode
+                              ? const Color(0xFF6C757D)
+                              : Colors.purpleAccent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 15,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        child: Text(
+                          'Crear Horario',
+                          style: TextStyle(
+                            color: themeProvider.primaryTextColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final horario = horarioProvider.horarioActivo!;
+        final estadisticas = horarioProvider.obtenerEstadisticas();
 
         return Scaffold(
           body: Container(
@@ -105,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: SafeArea(
               child: Column(
                 children: [
-                  // Menú superior con icono e inicial
+                  // Header con usuario
                   if (_userName != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 24, bottom: 8),
@@ -145,7 +370,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
-                  // AppBar personalizado con glassmorphism
+
+                  // AppBar con información del horario
                   Container(
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -172,66 +398,129 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             horizontal: 20,
                             vertical: 16,
                           ),
-                          child: Row(
+                          child: Column(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: themeProvider.isDarkMode
-                                        ? [
-                                            const Color(0xFF6C757D),
-                                            const Color(0xFF495057),
-                                          ]
-                                        : [
-                                            Colors.purpleAccent,
-                                            Colors.pinkAccent,
-                                          ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.calendar_today_rounded,
-                                  color: themeProvider.primaryTextColor,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Mi Calendario',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: themeProvider.primaryTextColor,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black26,
-                                      offset: const Offset(1, 1),
-                                      blurRadius: 3,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Spacer(),
-                              if (widget.onGoToEvents != null)
-                                GestureDetector(
-                                  onTap: widget.onGoToEvents,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(10),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: themeProvider.cardBackgroundColor,
-                                      borderRadius: BorderRadius.circular(15),
-                                      border: Border.all(
-                                        color: themeProvider.cardBorderColor,
+                                      gradient: LinearGradient(
+                                        colors: themeProvider.isDarkMode
+                                            ? [
+                                                const Color(0xFF6C757D),
+                                                const Color(0xFF495057),
+                                              ]
+                                            : [
+                                                Colors.purpleAccent,
+                                                Colors.pinkAccent,
+                                              ],
                                       ),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Icon(
-                                      Icons.list_rounded,
+                                      Icons.schedule_rounded,
                                       color: themeProvider.primaryTextColor,
                                       size: 20,
                                     ),
                                   ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          horario.nombre,
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color:
+                                                themeProvider.primaryTextColor,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          '${horario.tipoHorario.toString().split('.').last.toUpperCase()} • ${estadisticas['porcentajeCompletado']}% completo',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: themeProvider
+                                                .secondaryTextColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    icon: Icon(
+                                      Icons.more_vert,
+                                      color: themeProvider.primaryTextColor,
+                                    ),
+                                    onSelected: (value) async {
+                                      switch (value) {
+                                        case 'cambiar_tipo':
+                                          // TODO: Implementar selector de tipo
+                                          break;
+                                        case 'limpiar':
+                                          _confirmarLimpiarHorario(
+                                            horarioProvider,
+                                          );
+                                          break;
+                                        case 'nuevo':
+                                          _mostrarDialogoCrearHorario();
+                                          break;
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                        value: 'cambiar_tipo',
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.swap_horiz),
+                                            const SizedBox(width: 8),
+                                            const Text('Cambiar tipo'),
+                                          ],
+                                        ),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'limpiar',
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.clear_all),
+                                            const SizedBox(width: 8),
+                                            const Text('Limpiar horario'),
+                                          ],
+                                        ),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'nuevo',
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.add),
+                                            const SizedBox(width: 8),
+                                            const Text('Nuevo horario'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Barra de progreso
+                              LinearProgressIndicator(
+                                value:
+                                    estadisticas['porcentajeCompletado'] /
+                                    100.0,
+                                backgroundColor: themeProvider.isDarkMode
+                                    ? const Color(0xFF495057)
+                                    : Colors.grey.withOpacity(0.3),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  themeProvider.isDarkMode
+                                      ? const Color(0xFF6C757D)
+                                      : Colors.purpleAccent,
                                 ),
+                              ),
                             ],
                           ),
                         ),
@@ -239,637 +528,599 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
 
+                  // Horario Grid
                   Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        children: [
-                          // Calendario con diseño moderno
-                          SlideTransition(
-                            position:
-                                Tween<Offset>(
-                                  begin: const Offset(0, 0.3),
-                                  end: Offset.zero,
-                                ).animate(
-                                  CurvedAnimation(
-                                    parent: _slideController,
-                                    curve: Curves.easeOutCubic,
-                                  ),
-                                ),
-                            child: Container(
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: themeProvider.cardBackgroundColor,
+                        border: Border.all(
+                          color: themeProvider.cardBorderColor,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 20,
+                            spreadRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Column(
+                          children: [
+                            // Header de días con diseño más estético
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 18,
+                              ),
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(25),
-                                color: themeProvider.cardBackgroundColor,
-                                border: Border.all(
-                                  color: themeProvider.cardBorderColor,
-                                  width: 1,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: themeProvider.isDarkMode
+                                      ? [
+                                          const Color(0xFF2C3E50),
+                                          const Color(0xFF34495E),
+                                          const Color(0xFF4A6741),
+                                        ]
+                                      : [
+                                          const Color(0xFF667EEA),
+                                          const Color(0xFF764BA2),
+                                          const Color(0xFF667EEA),
+                                        ],
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 25,
-                                    spreadRadius: 0,
-                                    offset: const Offset(0, 10),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(25),
-                                child: BackdropFilter(
-                                  filter: ui.ImageFilter.blur(
-                                    sigmaX: 15,
-                                    sigmaY: 15,
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 85,
+                                    child: Text(
+                                      'HORARIO',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        letterSpacing: 0.5,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
                                   ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: TableCalendar(
-                                      firstDay: DateTime.utc(2020, 1, 1),
-                                      lastDay: DateTime.utc(2100, 12, 31),
-                                      focusedDay: _focusedDay,
-                                      selectedDayPredicate: (day) =>
-                                          isSameDay(_selectedDay, day),
-                                      onDaySelected: (selectedDay, focusedDay) {
-                                        setState(() {
-                                          _selectedDay = selectedDay;
-                                          _focusedDay = focusedDay;
-                                        });
-                                      },
-                                      calendarStyle: CalendarStyle(
-                                        outsideDaysVisible: false,
-                                        weekendTextStyle: TextStyle(
-                                          color:
-                                              themeProvider.secondaryTextColor,
+                                  ...diasSemana.map(
+                                    (dia) => Expanded(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 8,
+                                          horizontal: 4,
                                         ),
-                                        defaultTextStyle: TextStyle(
-                                          color: themeProvider.primaryTextColor,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white.withOpacity(
+                                              0.2,
+                                            ),
+                                            width: 1,
+                                          ),
                                         ),
-                                        todayTextStyle: TextStyle(
-                                          color: themeProvider.primaryTextColor,
-                                          fontWeight: FontWeight.bold,
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 2,
                                         ),
-                                        selectedTextStyle: TextStyle(
-                                          color: themeProvider.primaryTextColor,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        todayDecoration: BoxDecoration(
-                                          color: themeProvider.isDarkMode
-                                              ? const Color(0xFF6C757D)
-                                              : Colors.purpleAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        selectedDecoration: BoxDecoration(
-                                          color: themeProvider.isDarkMode
-                                              ? const Color(0xFF495057)
-                                              : Colors.deepPurpleAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      headerStyle: HeaderStyle(
-                                        formatButtonVisible: false,
-                                        titleCentered: true,
-                                        titleTextStyle: TextStyle(
-                                          color: themeProvider.primaryTextColor,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                        leftChevronIcon: Icon(
-                                          Icons.chevron_left,
-                                          color: themeProvider.primaryTextColor,
-                                        ),
-                                        rightChevronIcon: Icon(
-                                          Icons.chevron_right,
-                                          color: themeProvider.primaryTextColor,
-                                        ),
-                                      ),
-                                      daysOfWeekStyle: DaysOfWeekStyle(
-                                        weekdayStyle: TextStyle(
-                                          color:
-                                              themeProvider.secondaryTextColor,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        weekendStyle: TextStyle(
-                                          color:
-                                              themeProvider.secondaryTextColor,
-                                          fontWeight: FontWeight.bold,
+                                        child: Text(
+                                          dia.substring(0, 3).toUpperCase(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            letterSpacing: 0.3,
+                                          ),
+                                          textAlign: TextAlign.center,
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // Actividades de hoy con animaciones mejoradas
-                          FadeTransition(
-                            opacity: _animController,
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                color: themeProvider.cardBackgroundColor,
-                                border: Border.all(
-                                  color: themeProvider.cardBorderColor,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 20,
-                                    spreadRadius: 0,
-                                    offset: const Offset(0, 8),
-                                  ),
                                 ],
                               ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
-                                child: BackdropFilter(
-                                  filter: ui.ImageFilter.blur(
-                                    sigmaX: 10,
-                                    sigmaY: 10,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
+                            ),
+
+                            // Grid de horarios con diseño mejorado
+                            Expanded(
+                              child: SingleChildScrollView(
+                                physics: const BouncingScrollPhysics(),
+                                child: Column(
+                                  children: horariosDisponibles[horario.tipoHorario]!.asMap().entries.map((
+                                    entry,
+                                  ) {
+                                    final index = entry.key;
+                                    final hora = entry.value;
+                                    final isRecreo = _esRecreo(hora);
+
+                                    return AnimatedContainer(
+                                      duration: Duration(
+                                        milliseconds: 300 + (index * 50),
+                                      ),
+                                      height: isRecreo ? 35 : 70,
+                                      decoration: BoxDecoration(
+                                        border: Border(
+                                          bottom: BorderSide(
+                                            color: themeProvider.cardBorderColor
+                                                .withOpacity(0.3),
+                                            width: 0.5,
+                                          ),
+                                        ),
+                                        color: isRecreo
+                                            ? (themeProvider.isDarkMode
+                                                  ? const Color(
+                                                      0xFF2C3E50,
+                                                    ).withOpacity(0.3)
+                                                  : const Color(0xFFFFF8E1))
+                                            : (index % 2 == 0
+                                                  ? themeProvider
+                                                        .cardBackgroundColor
+                                                  : themeProvider.isDarkMode
+                                                  ? const Color(
+                                                      0xFF2C3E50,
+                                                    ).withOpacity(0.1)
+                                                  : const Color(0xFFFAFAFA)),
+                                        gradient: isRecreo
+                                            ? LinearGradient(
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight,
                                                 colors: themeProvider.isDarkMode
                                                     ? [
-                                                        const Color(0xFF6C757D),
-                                                        const Color(0xFF495057),
+                                                        const Color(
+                                                          0xFF2C3E50,
+                                                        ).withOpacity(0.2),
+                                                        const Color(
+                                                          0xFF34495E,
+                                                        ).withOpacity(0.1),
                                                       ]
                                                     : [
-                                                        Colors.orangeAccent,
-                                                        Colors.pinkAccent,
+                                                        const Color(0xFFFFF3E0),
+                                                        const Color(0xFFFFE0B2),
                                                       ],
-                                              ),
+                                              )
+                                            : null,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          // Columna de horas con mejor diseño
+                                          Container(
+                                            width: 85,
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: isRecreo
+                                                  ? (themeProvider.isDarkMode
+                                                        ? const Color(
+                                                            0xFF34495E,
+                                                          )
+                                                        : const Color(
+                                                            0xFFFFCC02,
+                                                          ))
+                                                  : (themeProvider.isDarkMode
+                                                        ? const Color(
+                                                            0xFF2C3E50,
+                                                          )
+                                                        : const Color(
+                                                            0xFF667EEA,
+                                                          )),
                                               borderRadius:
-                                                  BorderRadius.circular(12),
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(8),
+                                                    bottomLeft: Radius.circular(
+                                                      8,
+                                                    ),
+                                                  ),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color:
-                                                      (themeProvider.isDarkMode
-                                                              ? const Color(
-                                                                  0xFF6C757D,
-                                                                )
-                                                              : Colors
-                                                                    .orangeAccent)
-                                                          .withOpacity(0.3),
-                                                  blurRadius: 8,
-                                                  spreadRadius: 2,
+                                                  color: Colors.black
+                                                      .withOpacity(0.05),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(1, 0),
                                                 ),
                                               ],
                                             ),
-                                            child: AnimatedBuilder(
-                                              animation: _pulseController,
-                                              builder: (context, child) {
-                                                return Transform.scale(
-                                                  scale:
-                                                      1.0 +
-                                                      (_pulseController.value *
-                                                          0.1),
-                                                  child: Icon(
-                                                    Icons.today_rounded,
-                                                    color: themeProvider
-                                                        .primaryTextColor,
-                                                    size: 20,
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  hora.split(' ').first,
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
                                                   ),
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Text(
-                                            'Actividades de hoy',
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                              color: themeProvider
-                                                  .primaryTextColor,
-                                              shadows: [
-                                                Shadow(
-                                                  color: Colors.black26,
-                                                  offset: const Offset(1, 1),
-                                                  blurRadius: 3,
+                                                  textAlign: TextAlign.center,
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          if (widget.onGoToEvents != null)
-                                            GestureDetector(
-                                              onTap: widget.onGoToEvents,
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors:
-                                                        themeProvider.isDarkMode
-                                                        ? [
-                                                            const Color(
-                                                              0xFF6C757D,
-                                                            ),
-                                                            const Color(
-                                                              0xFF495057,
-                                                            ),
-                                                          ]
-                                                        : [
-                                                            Colors.purpleAccent,
-                                                            Colors
-                                                                .deepPurpleAccent,
-                                                          ],
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(15),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color:
-                                                          (themeProvider
-                                                                      .isDarkMode
-                                                                  ? const Color(
-                                                                      0xFF6C757D,
-                                                                    )
-                                                                  : Colors
-                                                                        .purpleAccent)
-                                                              .withOpacity(0.3),
-                                                      blurRadius: 6,
-                                                      spreadRadius: 1,
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: Text(
-                                                  'Ver todas',
-                                                  style: TextStyle(
-                                                    color: themeProvider
-                                                        .primaryTextColor,
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 16),
-                                      if (eventosHoy.isEmpty)
-                                        Center(
-                                          child: Column(
-                                            children: [
-                                              Icon(
-                                                Icons.event_available_rounded,
-                                                size: 48,
-                                                color: themeProvider
-                                                    .secondaryTextColor,
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                'No tienes actividades por hoy',
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  color: themeProvider
-                                                      .secondaryTextColor,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        )
-                                      else
-                                        ...eventosHoy.take(3).map((ev) {
-                                          return SlideTransition(
-                                            position:
-                                                Tween<Offset>(
-                                                  begin: const Offset(1, 0),
-                                                  end: Offset.zero,
-                                                ).animate(
-                                                  CurvedAnimation(
-                                                    parent: _animController,
-                                                    curve: Curves.elasticOut,
-                                                  ),
-                                                ),
-                                            child: Container(
-                                              margin: const EdgeInsets.only(
-                                                bottom: 12,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: themeProvider
-                                                    .cardBackgroundColor,
-                                                borderRadius:
-                                                    BorderRadius.circular(15),
-                                                border: Border.all(
-                                                  color: themeProvider
-                                                      .cardBorderColor,
-                                                ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withOpacity(0.1),
-                                                    blurRadius: 10,
-                                                    spreadRadius: 0,
-                                                  ),
-                                                ],
-                                              ),
-                                              child: ListTile(
-                                                leading: Container(
-                                                  padding: const EdgeInsets.all(
-                                                    8,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    gradient: LinearGradient(
-                                                      colors:
-                                                          themeProvider
-                                                              .isDarkMode
-                                                          ? [
-                                                              const Color(
-                                                                0xFF6C757D,
-                                                              ),
-                                                              const Color(
-                                                                0xFF495057,
-                                                              ),
-                                                            ]
-                                                          : [
-                                                              Colors.cyanAccent,
-                                                              Colors.blueAccent,
-                                                            ],
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          10,
-                                                        ),
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.event_note_rounded,
-                                                    color: themeProvider
-                                                        .primaryTextColor,
-                                                    size: 20,
-                                                  ),
-                                                ),
-                                                title: Text(
-                                                  ev.titulo,
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
-                                                    color: themeProvider
-                                                        .primaryTextColor,
-                                                  ),
-                                                ),
-                                                subtitle: Text(
-                                                  DateFormat(
-                                                    'dd/MM/yyyy – HH:mm',
-                                                  ).format(ev.fecha),
-                                                  style: TextStyle(
-                                                    color: themeProvider
-                                                        .secondaryTextColor,
-                                                  ),
-                                                ),
-                                                onTap: () {
-                                                  if (widget.onGoToEvents !=
-                                                      null) {
-                                                    widget.onGoToEvents!();
-                                                  }
-                                                },
-                                              ),
-                                            ),
-                                          );
-                                        }),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // Eventos del día seleccionado con diseño mejorado
-                          Container(
-                            width: double.infinity,
-                            height: 300,
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              color: themeProvider.cardBackgroundColor,
-                              border: Border.all(
-                                color: themeProvider.cardBorderColor,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 20,
-                                  spreadRadius: 0,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
-                              child: BackdropFilter(
-                                filter: ui.ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: themeProvider.isDarkMode
-                                                  ? [
-                                                      const Color(0xFF6C757D),
-                                                      const Color(0xFF495057),
-                                                    ]
-                                                  : [
-                                                      Colors.greenAccent,
-                                                      Colors.tealAccent,
-                                                    ],
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            Icons.calendar_month_rounded,
-                                            color:
-                                                themeProvider.primaryTextColor,
-                                            size: 18,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          'Eventos del ${DateFormat('dd/MM/yyyy').format(selected)}',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                            color:
-                                                themeProvider.primaryTextColor,
-                                            shadows: [
-                                              Shadow(
-                                                color: Colors.black26,
-                                                offset: const Offset(1, 1),
-                                                blurRadius: 3,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Expanded(
-                                      child: eventosDelDia.isEmpty
-                                          ? Center(
-                                              child: Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.event_busy_rounded,
-                                                    size: 48,
-                                                    color: themeProvider
-                                                        .secondaryTextColor,
-                                                  ),
-                                                  const SizedBox(height: 8),
+                                                if (!isRecreo) ...[
+                                                  const SizedBox(height: 2),
                                                   Text(
-                                                    'No tienes actividades para\n${DateFormat('dd/MM/yyyy').format(selected)}',
-                                                    textAlign: TextAlign.center,
+                                                    hora.split(' ').last,
                                                     style: TextStyle(
-                                                      color: themeProvider
-                                                          .secondaryTextColor,
+                                                      fontSize: 9,
+                                                      color: Colors.white
+                                                          .withOpacity(0.8),
                                                     ),
+                                                    textAlign: TextAlign.center,
                                                   ),
                                                 ],
-                                              ),
-                                            )
-                                          : ListView.separated(
-                                              itemCount: eventosDelDia.length,
-                                              separatorBuilder: (_, __) =>
-                                                  const SizedBox(height: 8),
-                                              itemBuilder: (context, i) {
-                                                final ev = eventosDelDia[i];
-                                                return SlideTransition(
-                                                  position:
-                                                      Tween<Offset>(
-                                                        begin: const Offset(
-                                                          1,
-                                                          0,
-                                                        ),
-                                                        end: Offset.zero,
-                                                      ).animate(
-                                                        CurvedAnimation(
-                                                          parent:
-                                                              _animController,
-                                                          curve: Interval(
-                                                            i * 0.1,
-                                                            1.0,
-                                                            curve:
-                                                                Curves.easeOut,
+                                              ],
+                                            ),
+                                          ),
+
+                                          // Celdas de días de la semana
+                                          ...diasSemana.map((dia) {
+                                            final materia = horarioProvider
+                                                .obtenerMateria(dia, hora);
+                                            final tieneMateria =
+                                                materia != null;
+
+                                            return Expanded(
+                                              child: Container(
+                                                height: double.infinity,
+                                                margin: const EdgeInsets.all(
+                                                  1.5,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                    color: tieneMateria
+                                                        ? horarioProvider
+                                                              .obtenerColorMateria(
+                                                                dia,
+                                                                hora,
+                                                              )
+                                                        : themeProvider
+                                                              .cardBorderColor
+                                                              .withOpacity(0.3),
+                                                    width: tieneMateria ? 2 : 1,
+                                                  ),
+                                                  gradient: tieneMateria
+                                                      ? LinearGradient(
+                                                          begin:
+                                                              Alignment.topLeft,
+                                                          end: Alignment
+                                                              .bottomRight,
+                                                          colors: [
+                                                            horarioProvider
+                                                                .obtenerColorMateria(
+                                                                  dia,
+                                                                  hora,
+                                                                )
+                                                                .withOpacity(
+                                                                  0.1,
+                                                                ),
+                                                            horarioProvider
+                                                                .obtenerColorMateria(
+                                                                  dia,
+                                                                  hora,
+                                                                )
+                                                                .withOpacity(
+                                                                  0.3,
+                                                                ),
+                                                          ],
+                                                        )
+                                                      : null,
+                                                  color: isRecreo
+                                                      ? Colors.transparent
+                                                      : (tieneMateria
+                                                            ? null
+                                                            : themeProvider
+                                                                  .isDarkMode
+                                                            ? const Color(
+                                                                0xFF34495E,
+                                                              ).withOpacity(0.1)
+                                                            : Colors.white),
+                                                  boxShadow: tieneMateria
+                                                      ? [
+                                                          BoxShadow(
+                                                            color: horarioProvider
+                                                                .obtenerColorMateria(
+                                                                  dia,
+                                                                  hora,
+                                                                )
+                                                                .withOpacity(
+                                                                  0.3,
+                                                                ),
+                                                            blurRadius: 4,
+                                                            spreadRadius: 1,
                                                           ),
-                                                        ),
-                                                      ),
-                                                  child: Container(
-                                                    decoration: BoxDecoration(
-                                                      color: themeProvider
-                                                          .cardBackgroundColor,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            12,
-                                                          ),
-                                                      border: Border.all(
-                                                        color: themeProvider
-                                                            .cardBorderColor,
-                                                      ),
-                                                    ),
-                                                    child: ListTile(
-                                                      leading: Container(
-                                                        width: 40,
-                                                        height: 40,
-                                                        decoration: BoxDecoration(
-                                                          gradient: LinearGradient(
-                                                            colors:
+                                                        ]
+                                                      : null,
+                                                ),
+                                                child: isRecreo
+                                                    ? Center(
+                                                        child: Container(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal: 8,
+                                                                vertical: 4,
+                                                              ),
+                                                          decoration: BoxDecoration(
+                                                            color:
                                                                 themeProvider
                                                                     .isDarkMode
-                                                                ? [
-                                                                    const Color(
-                                                                      0xFF6C757D,
-                                                                    ),
-                                                                    const Color(
-                                                                      0xFF495057,
-                                                                    ),
-                                                                  ]
-                                                                : [
-                                                                    Colors
-                                                                        .indigoAccent,
-                                                                    Colors
-                                                                        .purpleAccent,
-                                                                  ],
+                                                                ? const Color(
+                                                                    0xFF34495E,
+                                                                  )
+                                                                : const Color(
+                                                                    0xFFFFCC02,
+                                                                  ),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
                                                           ),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                        ),
-                                                        child: Center(
                                                           child: Text(
-                                                            '${ev.fecha.day}',
+                                                            'RECREO',
                                                             style: TextStyle(
-                                                              color: themeProvider
-                                                                  .primaryTextColor,
+                                                              fontSize: 8,
                                                               fontWeight:
                                                                   FontWeight
                                                                       .bold,
-                                                              fontSize: 14,
+                                                              color:
+                                                                  themeProvider
+                                                                      .isDarkMode
+                                                                  ? Colors.white
+                                                                  : const Color(
+                                                                      0xFF2C3E50,
+                                                                    ),
                                                             ),
                                                           ),
                                                         ),
-                                                      ),
-                                                      title: Text(
-                                                        ev.titulo,
-                                                        style: TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: themeProvider
-                                                              .primaryTextColor,
+                                                      )
+                                                    : Material(
+                                                        color:
+                                                            Colors.transparent,
+                                                        child: InkWell(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                          onTap: () =>
+                                                              _mostrarDialogoAgregarMateria(
+                                                                dia,
+                                                                hora,
+                                                              ),
+                                                          onLongPress:
+                                                              tieneMateria
+                                                              ? () async {
+                                                                  final confirm = await showDialog<bool>(
+                                                                    context:
+                                                                        context,
+                                                                    builder: (context) => AlertDialog(
+                                                                      shape: RoundedRectangleBorder(
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(
+                                                                              15,
+                                                                            ),
+                                                                      ),
+                                                                      title: Row(
+                                                                        children: [
+                                                                          Icon(
+                                                                            Icons.delete_outline,
+                                                                            color:
+                                                                                Colors.red,
+                                                                            size:
+                                                                                24,
+                                                                          ),
+                                                                          const SizedBox(
+                                                                            width:
+                                                                                8,
+                                                                          ),
+                                                                          const Text(
+                                                                            'Eliminar materia',
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                      content: Text(
+                                                                        '¿Eliminar ${materia.nombre}?',
+                                                                      ),
+                                                                      actions: [
+                                                                        TextButton(
+                                                                          onPressed: () => Navigator.pop(
+                                                                            context,
+                                                                            false,
+                                                                          ),
+                                                                          child: const Text(
+                                                                            'Cancelar',
+                                                                          ),
+                                                                        ),
+                                                                        ElevatedButton(
+                                                                          onPressed: () => Navigator.pop(
+                                                                            context,
+                                                                            true,
+                                                                          ),
+                                                                          style: ElevatedButton.styleFrom(
+                                                                            backgroundColor:
+                                                                                Colors.red,
+                                                                          ),
+                                                                          child: const Text(
+                                                                            'Eliminar',
+                                                                            style: TextStyle(
+                                                                              color: Colors.white,
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  );
+
+                                                                  if (confirm ==
+                                                                      true) {
+                                                                    horarioProvider
+                                                                        .removerMateria(
+                                                                          dia:
+                                                                              dia,
+                                                                          hora:
+                                                                              hora,
+                                                                        );
+                                                                  }
+                                                                }
+                                                              : null,
+                                                          child: Container(
+                                                            padding:
+                                                                const EdgeInsets.all(
+                                                                  6,
+                                                                ),
+                                                            child: tieneMateria
+                                                                ? Column(
+                                                                    mainAxisAlignment:
+                                                                        MainAxisAlignment
+                                                                            .center,
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment
+                                                                            .center,
+                                                                    children: [
+                                                                      Text(
+                                                                        materia
+                                                                            .nombre,
+                                                                        style: TextStyle(
+                                                                          fontSize:
+                                                                              9,
+                                                                          fontWeight:
+                                                                              FontWeight.w600,
+                                                                          color:
+                                                                              themeProvider.primaryTextColor,
+                                                                        ),
+                                                                        textAlign:
+                                                                            TextAlign.center,
+                                                                        overflow:
+                                                                            TextOverflow.ellipsis,
+                                                                        maxLines:
+                                                                            2,
+                                                                      ),
+                                                                      if (materia
+                                                                              .aula !=
+                                                                          'Sin aula') ...[
+                                                                        const SizedBox(
+                                                                          height:
+                                                                              2,
+                                                                        ),
+                                                                        Container(
+                                                                          padding: const EdgeInsets.symmetric(
+                                                                            horizontal:
+                                                                                4,
+                                                                            vertical:
+                                                                                1,
+                                                                          ),
+                                                                          decoration: BoxDecoration(
+                                                                            color: horarioProvider
+                                                                                .obtenerColorMateria(
+                                                                                  dia,
+                                                                                  hora,
+                                                                                )
+                                                                                .withOpacity(
+                                                                                  0.8,
+                                                                                ),
+                                                                            borderRadius: BorderRadius.circular(
+                                                                              6,
+                                                                            ),
+                                                                          ),
+                                                                          child: Text(
+                                                                            materia.aula,
+                                                                            style: const TextStyle(
+                                                                              fontSize: 7,
+                                                                              color: Colors.white,
+                                                                              fontWeight: FontWeight.w500,
+                                                                            ),
+                                                                            textAlign:
+                                                                                TextAlign.center,
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                      if (materia
+                                                                              .profesor !=
+                                                                          'Sin profesor') ...[
+                                                                        const SizedBox(
+                                                                          height:
+                                                                              2,
+                                                                        ),
+                                                                        Text(
+                                                                          materia
+                                                                              .profesor,
+                                                                          style: TextStyle(
+                                                                            fontSize:
+                                                                                7,
+                                                                            color:
+                                                                                themeProvider.secondaryTextColor,
+                                                                            fontStyle:
+                                                                                FontStyle.italic,
+                                                                          ),
+                                                                          textAlign:
+                                                                              TextAlign.center,
+                                                                          maxLines:
+                                                                              1,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                        ),
+                                                                      ],
+                                                                    ],
+                                                                  )
+                                                                : Center(
+                                                                    child: Container(
+                                                                      padding:
+                                                                          const EdgeInsets.all(
+                                                                            8,
+                                                                          ),
+                                                                      decoration: BoxDecoration(
+                                                                        color:
+                                                                            themeProvider.isDarkMode
+                                                                            ? const Color(
+                                                                                0xFF34495E,
+                                                                              ).withOpacity(
+                                                                                0.5,
+                                                                              )
+                                                                            : Colors.grey.withOpacity(
+                                                                                0.1,
+                                                                              ),
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(
+                                                                              20,
+                                                                            ),
+                                                                      ),
+                                                                      child: Icon(
+                                                                        Icons
+                                                                            .add_rounded,
+                                                                        size:
+                                                                            18,
+                                                                        color: themeProvider
+                                                                            .secondaryTextColor,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                          ),
                                                         ),
                                                       ),
-                                                      subtitle: Text(
-                                                        '${DateFormat('HH:mm').format(ev.fecha)} • ${ev.descripcion}',
-                                                        style: TextStyle(
-                                                          color: themeProvider
-                                                              .secondaryTextColor,
-                                                        ),
-                                                      ),
-                                                      onTap: () {
-                                                        if (widget
-                                                                .onGoToEvents !=
-                                                            null) {
-                                                          widget
-                                                              .onGoToEvents!();
-                                                        }
-                                                      },
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                    ),
-                                  ],
+                                              ),
+                                            );
+                                          }),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
                               ),
                             ),
-                          ),
-
-                          const SizedBox(height: 100), // Espacio para el FAB
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -877,70 +1128,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          floatingActionButton: AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: 1.0 + (_pulseController.value * 0.05),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: themeProvider.isDarkMode
-                          ? [
-                              const Color(0xFF6C757D),
-                              const Color(0xFF495057),
-                              const Color(0xFF343A40),
-                            ]
-                          : [
-                              Colors.pinkAccent,
-                              Colors.purpleAccent,
-                              Colors.deepPurpleAccent,
-                            ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            (themeProvider.isDarkMode
-                                    ? const Color(0xFF6C757D)
-                                    : Colors.purpleAccent)
-                                .withOpacity(0.6),
-                        blurRadius: 15,
-                        spreadRadius: 3,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+          // BOTÓN FLOTANTE BLANCO CORREGIDO
+          floatingActionButton: FloatingActionButton(
+            heroTag: 'home_fab',
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.blue,
+            elevation: 6,
+            tooltip: 'Agregar materia',
+            child: const Icon(Icons.add_rounded, size: 28),
+            onPressed: () {
+              // Mostrar las próximas horas disponibles
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    'Toca cualquier celda vacía para agregar una materia',
                   ),
-                  child: FloatingActionButton(
-                    heroTag: 'home_fab',
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    tooltip: 'Crear evento',
-                    child: Icon(
-                      Icons.add_rounded,
-                      color: themeProvider.primaryTextColor,
-                      size: 28,
-                    ),
-                    onPressed: () {
-                      if (widget.onGoToEvents != null) {
-                        widget.onGoToEvents!();
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Ir a Eventos para crear uno'),
-                            backgroundColor: themeProvider.isDarkMode
-                                ? const Color(0xFF6C757D)
-                                : Colors.purpleAccent,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        );
-                      }
-                    },
+                  backgroundColor: themeProvider.isDarkMode
+                      ? const Color(0xFF6C757D)
+                      : Colors.purpleAccent,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               );

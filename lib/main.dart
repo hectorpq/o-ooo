@@ -1,4 +1,4 @@
-// lib/main.dart
+// lib/main.dart - SOLUCIÓN FINAL CORREGIDA
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -10,9 +10,10 @@ import 'services/notification_service.dart';
 // Modelo y Provider
 import 'models/evento.dart';
 import 'providers/event_provider.dart';
-import 'providers/theme_provider.dart'; // ✨ NUEVO: Import del ThemeProvider
+import 'providers/theme_provider.dart';
+import 'providers/horario_provider.dart';
 
-// ✨ AGREGAR: Import del AuthService
+// Import del AuthService
 import 'auth/auth_service.dart';
 
 // Pantallas
@@ -21,10 +22,16 @@ import 'screens/calendar_screen.dart';
 import 'screens/events_screen.dart';
 import 'screens/world_screen.dart';
 import 'screens/settings_screen.dart';
-// ✨ AGREGAR: Import de la pantalla de login
+// Import de la pantalla de login
 import 'auth/login_screen.dart';
 
 void main() async {
+  // Capturar errores globales
+  FlutterError.onError = (FlutterErrorDetails details) {
+    print('🚨 ERROR FLUTTER: ${details.exception}');
+    print('📍 UBICACIÓN: ${details.library}');
+  };
+
   // Asegurar que los widgets estén inicializados
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -35,7 +42,7 @@ void main() async {
     );
     print('✅ Firebase inicializado correctamente');
 
-    // 🔔 Inicializar servicio de notificaciones
+    // Inicializar servicio de notificaciones
     await NotificationService.initialize();
     print('✅ Servicio de notificaciones inicializado');
   } catch (e) {
@@ -52,17 +59,20 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // ✨ NUEVO: ThemeProvider como primer provider
+        // ThemeProvider como primer provider
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        // ✨ AGREGAR: AuthService como segundo provider
-        ChangeNotifierProvider(
-          create: (_) => AuthService(), // Se inicializa automáticamente
-        ),
+
+        // HorarioProvider
+        ChangeNotifierProvider(create: (_) => HorarioProvider()),
+
+        // AuthService
+        ChangeNotifierProvider(create: (_) => AuthService()),
+
+        // EventProvider
         ChangeNotifierProvider(
           create: (_) => EventProvider()..listenToUserChanges(),
         ),
       ],
-      // ✨ NUEVO: Consumer para usar el tema dinámico
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
@@ -73,7 +83,6 @@ class MyApp extends StatelessWidget {
             themeMode: themeProvider.isDarkMode
                 ? ThemeMode.dark
                 : ThemeMode.light,
-            // ✨ CAMBIO: Usar AuthWrapper en lugar de FirebaseLoadingScreen
             home: const AuthWrapper(),
           );
         },
@@ -82,7 +91,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ✨ NUEVO: Wrapper que maneja el flujo de autenticación
+// Wrapper que maneja el flujo de autenticación
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
@@ -108,10 +117,10 @@ class AuthWrapper extends StatelessWidget {
 
         // Si NO está autenticado -> Ir a Login
         if (!authService.isAuthenticated) {
-          return const LoginScreen(); // Tu pantalla de login existente
+          return const LoginScreen();
         }
 
-        // Si SÍ está autenticado -> Ir a FirebaseLoadingScreen (tu flujo normal)
+        // Si SÍ está autenticado -> Ir a FirebaseLoadingScreen
         return const FirebaseLoadingScreen();
       },
     );
@@ -129,6 +138,8 @@ class FirebaseLoadingScreen extends StatefulWidget {
 class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
   bool _isFirebaseReady = false;
   String _statusMessage = 'Conectando con Firebase...';
+  bool _isDisposed =
+      false; // ✅ AGREGAR: Flag para evitar setState después de dispose
 
   @override
   void initState() {
@@ -136,44 +147,98 @@ class _FirebaseLoadingScreenState extends State<FirebaseLoadingScreen> {
     _checkFirebaseConnection();
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true; // ✅ AGREGAR: Marcar como disposed
+    super.dispose();
+  }
+
+  // ✅ FUNCIÓN SEGURA PARA setState
+  void _safeSetState(VoidCallback fn) {
+    if (!_isDisposed && mounted) {
+      setState(fn);
+    }
+  }
+
   Future<void> _checkFirebaseConnection() async {
     try {
       // Verificar si Firebase está inicializado
       await Future.delayed(const Duration(seconds: 1));
 
+      if (_isDisposed) return; // ✅ VERIFICAR: No continuar si está disposed
+
       if (Firebase.apps.isNotEmpty) {
-        setState(() {
+        _safeSetState(() {
           _isFirebaseReady = true;
           _statusMessage = 'Conectado exitosamente';
         });
 
-        // ✨ ELIMINADO: NO cargar eventos aquí porque listenToEvents() lo hace automáticamente
-        // await context.read<EventProvider>().loadEvents(); // ← LÍNEA ELIMINADA
+        // Inicializar HorarioProvider después de Firebase
+        await _initializeHorarioProvider();
+
+        if (_isDisposed) return; // ✅ VERIFICAR: No continuar si está disposed
 
         // Esperar un poco antes de navegar
         await Future.delayed(const Duration(seconds: 1));
 
-        if (mounted) {
+        if (!_isDisposed && mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const MainScreen()),
           );
         }
       } else {
-        setState(() {
+        _safeSetState(() {
           _statusMessage = 'Error: Firebase no inicializado';
         });
       }
     } catch (e) {
-      setState(() {
+      _safeSetState(() {
         _statusMessage = 'Error de conexión: $e';
       });
 
       // Intentar continuar sin Firebase después de un error
       await Future.delayed(const Duration(seconds: 3));
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const MainScreen()),
         );
+      }
+    }
+  }
+
+  // Inicializar HorarioProvider de forma segura
+  Future<void> _initializeHorarioProvider() async {
+    if (_isDisposed || !mounted)
+      return; // ✅ VERIFICAR: No continuar si está disposed
+
+    try {
+      // ✅ LÍNEA 177: Usar _safeSetState para evitar el error
+      _safeSetState(() {
+        _statusMessage = 'Inicializando horarios...';
+      });
+
+      // Esperar un frame para asegurar que el widget sigue montado
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (!_isDisposed && mounted) {
+        final horarioProvider = context.read<HorarioProvider>();
+
+        // Inicializar en un try-catch separado para manejar errores del índice
+        try {
+          await horarioProvider.inicializar();
+          print('✅ HorarioProvider inicializado');
+        } catch (indexError) {
+          print('⚠️ Error de índice en horarios (continuando): $indexError');
+          // No bloquear - continuar sin horarios
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error al inicializar horarios: $e');
+      // ✅ ASEGURAR que _safeSetState se use aquí también
+      if (!_isDisposed && mounted) {
+        _safeSetState(() {
+          _statusMessage = 'Continuando sin horarios...';
+        });
       }
     }
   }
@@ -221,21 +286,34 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  bool _isDisposed =
+      false; // ✅ AGREGAR: Flag para evitar setState después de dispose
 
   @override
   void initState() {
     super.initState();
     _checkFirebaseStatus();
 
-    // 🔥 NUEVA FUNCIONALIDAD: Sincronización en tiempo real automática
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final eventProvider = context.read<EventProvider>();
-      // ✨ Solo usar listenToEvents() - esto carga Y escucha cambios automáticamente
-      eventProvider.listenToEvents();
-
-      // 🔔 Verificar notificaciones pendientes periódicamente
-      _startNotificationChecker();
+      if (!_isDisposed && mounted) {
+        final eventProvider = context.read<EventProvider>();
+        eventProvider.listenToEvents();
+        _startNotificationChecker();
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true; // ✅ AGREGAR: Marcar como disposed
+    super.dispose();
+  }
+
+  // ✅ FUNCIÓN SEGURA PARA setState
+  void _safeSetState(VoidCallback fn) {
+    if (!_isDisposed && mounted) {
+      setState(fn);
+    }
   }
 
   void _checkFirebaseStatus() {
@@ -249,102 +327,102 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  // 🔔 Verificador periódico de notificaciones
   void _startNotificationChecker() {
-    // Verificar cada 5 minutos si hay notificaciones pendientes
+    if (_isDisposed) return; // ✅ VERIFICAR: No iniciar si está disposed
+
     Stream.periodic(const Duration(minutes: 5)).listen((_) async {
-      final eventProvider = context.read<EventProvider>();
-      await eventProvider.verificarNotificacionesPendientes();
+      if (!_isDisposed && mounted) {
+        final eventProvider = context.read<EventProvider>();
+        await eventProvider.verificarNotificacionesPendientes();
+      }
     });
   }
 
-  // ✨ MÉTODOS ACTUALIZADOS para usar el nuevo EventProvider
-
   Future<void> _addEvento(Evento evento) async {
-    try {
-      // El nuevo EventProvider ya maneja las notificaciones internamente
-      await context.read<EventProvider>().addEvent(evento);
+    if (_isDisposed) return; // ✅ VERIFICAR
 
-      if (mounted) {
+    try {
+      await context.read<EventProvider>().addEvent(evento);
+      if (!_isDisposed && mounted) {
         _showSuccessSnackBar('Evento creado exitosamente');
       }
     } catch (e) {
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showErrorSnackBar('Error al crear evento: $e');
       }
     }
   }
 
   Future<void> _editEvento(int index, Evento eventoEditado) async {
+    if (_isDisposed) return; // ✅ VERIFICAR
+
     try {
       final eventProvider = context.read<EventProvider>();
       final oldEventId = eventProvider.events[index].id;
-
-      // El nuevo EventProvider ya reprograma las notificaciones automáticamente
       await eventProvider.updateEvent(oldEventId, eventoEditado);
-
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showSuccessSnackBar('Evento actualizado exitosamente');
       }
     } catch (e) {
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showErrorSnackBar('Error al actualizar evento: $e');
       }
     }
   }
 
   Future<void> _deleteEvento(int index) async {
+    if (_isDisposed) return; // ✅ VERIFICAR
+
     try {
       final eventProvider = context.read<EventProvider>();
       final evento = eventProvider.events[index];
       final eventoTitulo = evento.titulo;
-
-      // El nuevo EventProvider ya cancela las notificaciones automáticamente
       await eventProvider.deleteEvent(evento.id);
-
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showSuccessSnackBar('Evento eliminado: $eventoTitulo');
       }
     } catch (e) {
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showErrorSnackBar('Error al eliminar evento: $e');
       }
     }
   }
 
-  // 🔔 NUEVAS FUNCIONES para gestión avanzada de notificaciones
   Future<void> _toggleEventNotification(String eventoId) async {
+    if (_isDisposed) return; // ✅ VERIFICAR
+
     try {
       await context.read<EventProvider>().toggleNotificacion(eventoId);
-
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showSuccessSnackBar('Configuración de notificación actualizada');
       }
     } catch (e) {
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showErrorSnackBar('Error al cambiar notificación: $e');
       }
     }
   }
 
   Future<void> _updateNotificationTime(String eventoId, int minutes) async {
+    if (_isDisposed) return; // ✅ VERIFICAR
+
     try {
       await context.read<EventProvider>().updateMinutosAntes(eventoId, minutes);
-
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showSuccessSnackBar(
           'Tiempo de notificación actualizado a $minutes minutos',
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         _showErrorSnackBar('Error al actualizar tiempo: $e');
       }
     }
   }
 
-  // 🎨 Métodos helper para SnackBars mejorados
   void _showSuccessSnackBar(String message) {
+    if (_isDisposed || !mounted) return; // ✅ VERIFICAR
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -363,6 +441,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showErrorSnackBar(String message) {
+    if (_isDisposed || !mounted) return; // ✅ VERIFICAR
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -380,30 +460,23 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Limpiar recursos cuando se destruya el widget
-  @override
-  void dispose() {
-    // El EventProvider se limpia automáticamente en su dispose()
-    super.dispose();
-  }
-
-  // ✨ Páginas mejoradas con Consumer para reactividad
   List<Widget> _buildPages() {
     return [
-      // Home Screen
-      Consumer<EventProvider>(
-        builder: (context, eventProvider, child) {
-          if (eventProvider.errorMessage != null) {
-            // Mostrar error si hay problemas
+      // Home Screen - CON MANEJO DE ERRORES
+      Consumer2<EventProvider, HorarioProvider>(
+        builder: (context, eventProvider, horarioProvider, child) {
+          if (eventProvider.errorMessage != null && !_isDisposed && mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _showErrorSnackBar(eventProvider.errorMessage!);
-              eventProvider.clearError();
+              if (!_isDisposed && mounted) {
+                _showErrorSnackBar(eventProvider.errorMessage!);
+                eventProvider.clearError();
+              }
             });
           }
 
           return HomeScreen(
             eventos: eventProvider.events,
-            onGoToEvents: () => setState(() => _selectedIndex = 2),
+            onGoToEvents: () => _safeSetState(() => _selectedIndex = 2),
           );
         },
       ),
@@ -416,8 +489,7 @@ class _MainScreenState extends State<MainScreen> {
             onAddEvento: _addEvento,
             onEditEvento: _editEvento,
             onDeleteEvento: _deleteEvento,
-            onGoToEvents: () => setState(() => _selectedIndex = 2),
-            // 🔔 Nuevas funciones de notificaciones
+            onGoToEvents: () => _safeSetState(() => _selectedIndex = 2),
             onToggleNotification: _toggleEventNotification,
             onUpdateNotificationTime: _updateNotificationTime,
           );
@@ -432,7 +504,6 @@ class _MainScreenState extends State<MainScreen> {
             onAddEvento: _addEvento,
             onEditEvento: _editEvento,
             onDeleteEvento: _deleteEvento,
-            // 🔔 Nuevas funciones de notificaciones
             onToggleNotification: _toggleEventNotification,
             onUpdateNotificationTime: _updateNotificationTime,
           );
@@ -440,20 +511,17 @@ class _MainScreenState extends State<MainScreen> {
       ),
 
       const WorldScreen(),
-
-      // ✨ CORREGIDO: Usar tu SettingsScreen separado sin parámetros
       const SettingsScreen(),
     ];
   }
 
-  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
+  void _onItemTapped(int index) => _safeSetState(() => _selectedIndex = index);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Consumer<EventProvider>(
         builder: (context, eventProvider, child) {
-          // Mostrar loading mientras se cargan los eventos
           if (eventProvider.isLoading && eventProvider.events.isEmpty) {
             return Center(
               child: Column(
@@ -487,7 +555,6 @@ class _MainScreenState extends State<MainScreen> {
       ),
       bottomNavigationBar: Consumer<EventProvider>(
         builder: (context, eventProvider, child) {
-          // Mostrar badge de notificaciones próximas
           final notificacionesProximas =
               eventProvider.eventosConNotificacionProxima.length;
 

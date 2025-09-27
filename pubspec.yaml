@@ -29,6 +29,7 @@ dependencies:
   speech_to_text: ^7.3.0   # 🔥 actualizado, compatible con Flutter moderno
   shared_preferences: ^2.2.2  # Guardar tema
   flutter_colorpicker: ^1.0.3  # Selector de colores para categorías
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
