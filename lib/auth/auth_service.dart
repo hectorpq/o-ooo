@@ -1,6 +1,7 @@
 // lib/auth/auth_service.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/widget_service.dart';
 
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -217,6 +218,10 @@ class AuthService extends ChangeNotifier {
   Future<void> signOut() async {
     try {
       print('🔄 Cerrando sesión...');
+
+      // Limpiar widget del home screen antes de cerrar sesión
+      await WidgetService.clearWidget();
+
       await _auth.signOut();
       _clearError();
       print('✅ Sesión cerrada exitosamente');

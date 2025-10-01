@@ -113,7 +113,7 @@ class WidgetService {
     }
   }
 
-  /// Preparar los datos que se enviarían al widget (VERSIÓN CORREGIDA)
+  /// Preparar los datos que se enviarían al widget (siempre funciona)
   static Future<Map<String, dynamic>> _prepareWidgetData({
     HorarioProvider? horarioProvider,
     List<Evento>? eventos,
@@ -121,46 +121,35 @@ class WidgetService {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // Información básica que espera el widget de Android
+    // Información básica
     final widgetData = <String, dynamic>{
-      'eventsToday': 0,
-      'nextEventToday': '',
-      'nextEventTodayTime': '',
-      'scheduleStatus': 'Sin clases',
-      'currentSubject': '',
       'lastUpdate': now.millisecondsSinceEpoch,
+      'currentTime': _formatTime(now),
+      'currentDate': _formatDate(now),
+      'dayOfWeek': _getDayOfWeek(now.weekday),
     };
 
     // Agregar información de horarios si está disponible
-    if (horarioProvider != null && horarioProvider.tieneHorarioActivo) {
-      final horarioData = await _getHorarioData(horarioProvider, now);
-
-      // Mapear a los nombres que espera Android
-      widgetData['scheduleStatus'] =
-          horarioData['scheduleStatus'] ?? 'Sin clases';
-      widgetData['currentSubject'] = horarioData['currentSubject'] ?? '';
-
-      print(
-        'Datos de horario para widget: ${horarioData['scheduleStatus']}, ${horarioData['currentSubject']}',
-      );
+    if (horarioProvider != null) {
+      widgetData.addAll(await _getHorarioData(horarioProvider, now));
+    } else {
+      widgetData.addAll({
+        'hasSchedule': false,
+        'scheduleStatus': 'Sin horario disponible',
+      });
     }
 
-    // Agregar eventos de hoy si están disponibles
+    // Agregar eventos próximos si están disponibles
     if (eventos != null && eventos.isNotEmpty) {
-      final eventosData = _getEventosData(eventos, today);
-
-      // Mapear a los nombres que espera Android
-      widgetData['eventsToday'] = eventosData['eventsToday'] ?? 0;
-      widgetData['nextEventToday'] = eventosData['nextEventToday'] ?? '';
-      widgetData['nextEventTodayTime'] =
-          eventosData['nextEventTodayTime'] ?? '';
-
-      print(
-        'Datos de eventos para widget: ${eventosData['eventsToday']} eventos, próximo: ${eventosData['nextEventToday']}',
-      );
+      widgetData.addAll(_getEventosData(eventos, today));
+    } else {
+      widgetData.addAll({
+        'hasEvents': false,
+        'eventsToday': 0,
+        'eventsUpcoming': 0,
+      });
     }
 
-    print('Datos finales enviados al widget: $widgetData');
     return widgetData;
   }
 
@@ -171,48 +160,143 @@ class WidgetService {
   ) async {
     try {
       if (!horarioProvider.tieneHorarioActivo) {
-        return {'hasSchedule': false, 'scheduleStatus': 'Sin horario activo'};
+        return {
+          'hasSchedule': false,
+          'currentStatus': 'Sin horario activo',
+          'todayClasses': <Map<String, dynamic>>[],
+        };
       }
 
-      // Obtener estadísticas del horario
-      final estadisticas = horarioProvider.obtenerEstadisticas();
-      final totalSlots = estadisticas['slotsOcupados'] as int;
-      final totalMaterias = estadisticas['totalMaterias'] as int;
-
-      // Buscar materia actual basada en día y hora
       final diaActual = _getDiaSemana(now.weekday);
-      final horaActual = _getHoraSlot(now);
+      final materiaActual = _getMateriaActual(horarioProvider, now);
 
-      final materiaActual = horarioProvider.obtenerMateria(
-        diaActual,
-        horaActual,
-      );
+      // Obtener todas las clases del día
+      final clasesDelDia = _getClasesDelDia(horarioProvider, diaActual, now);
 
-      // Buscar próxima materia
-      final proximaMateria = _buscarProximaMateria(horarioProvider, now);
+      // Determinar estado actual
+      String currentStatus;
+      if (materiaActual != null) {
+        currentStatus = 'Ahora: ${materiaActual.nombre}';
+      } else {
+        final proximaClase = _getProximaClase(clasesDelDia, now);
+        if (proximaClase != null) {
+          currentStatus =
+              'Próxima: ${proximaClase['name']} (${proximaClase['time']})';
+        } else {
+          currentStatus = _getScheduleStatus(null, null, now);
+        }
+      }
 
       return {
-        'hasSchedule': totalSlots > 0,
-        'totalClassesToday': _contarClasesHoy(horarioProvider, now),
-        'totalMaterias': totalMaterias,
-        'currentSubject': materiaActual?.nombre ?? '',
-        'currentSubjectAula': materiaActual?.aula ?? '',
-        'currentSubjectProfesor': materiaActual?.profesor ?? '',
-        'nextSubject': proximaMateria?.nombre ?? '',
-        'nextSubjectTime': proximaMateria != null
-            ? _getProximaHora(proximaMateria, horarioProvider, now)
-            : '',
-        'scheduleStatus': _getScheduleStatus(
-          materiaActual,
-          proximaMateria,
-          now,
-        ),
+        'hasSchedule': clasesDelDia.isNotEmpty,
+        'currentStatus': currentStatus,
+        'todayClasses': clasesDelDia,
       };
     } catch (e) {
       print('⚠️ Error obteniendo datos de horario: $e');
-      return {'hasSchedule': false, 'scheduleStatus': 'Error en horario'};
+      return {
+        'hasSchedule': false,
+        'currentStatus': 'Error en horario',
+        'todayClasses': <Map<String, dynamic>>[],
+      };
     }
   }
+
+  /// Obtener materia actual
+  static Materia? _getMateriaActual(HorarioProvider provider, DateTime now) {
+    final diaActual = _getDiaSemana(now.weekday);
+    final horaActual = _getHoraSlot(now);
+    return provider.obtenerMateria(diaActual, horaActual);
+  }
+
+  /// Obtener todas las clases del día
+  static List<Map<String, dynamic>> _getClasesDelDia(
+    HorarioProvider provider,
+    String dia,
+    DateTime now,
+  ) {
+    final horario = provider.horarioActivo;
+    if (horario == null) return [];
+
+    final clases = <Map<String, dynamic>>[];
+    final horaActualMinutos = now.hour * 60 + now.minute;
+
+    // Obtener slots del día específico
+    final slotsDelDia = horario.slots.where((slot) => slot.dia == dia).toList();
+
+    for (final slot in slotsDelDia) {
+      if (slot.materiaId != null) {
+        final materia = horario.materias[slot.materiaId];
+        if (materia != null) {
+          // Verificar si es la clase actual
+          final slotHoraInicio = _extraerMinutosDeSlot(slot.hora);
+          final slotHoraFin =
+              slotHoraInicio + 50; // Asumiendo 50 minutos por clase
+          final isCurrent =
+              horaActualMinutos >= slotHoraInicio &&
+              horaActualMinutos < slotHoraFin;
+
+          clases.add({
+            'time': slot.hora,
+            'name': materia.nombre,
+            'location': materia.aula != 'Sin aula' ? materia.aula : '',
+            'professor': materia.profesor != 'Sin profesor'
+                ? materia.profesor
+                : '',
+            'isCurrent': isCurrent,
+            'color': materia.colorHex,
+          });
+        }
+      }
+    }
+
+    // Ordenar por hora
+    clases.sort((a, b) {
+      final timeA = _extraerMinutosDeSlot(a['time'] as String);
+      final timeB = _extraerMinutosDeSlot(b['time'] as String);
+      return timeA.compareTo(timeB);
+    });
+
+    return clases;
+  }
+
+  /// Extraer minutos totales de un slot de hora
+  static int _extraerMinutosDeSlot(String slot) {
+    try {
+      // Extraer la hora de inicio del formato "7:30 - 8:20 (M1)"
+      final partes = slot.split(' - ');
+      if (partes.isNotEmpty) {
+        final horaInicio = partes[0].trim();
+        final tiempoPartes = horaInicio.split(':');
+        if (tiempoPartes.length == 2) {
+          final hora = int.parse(tiempoPartes[0]);
+          final minuto = int.parse(tiempoPartes[1]);
+          return hora * 60 + minuto;
+        }
+      }
+    } catch (e) {
+      print('Error extrayendo minutos de $slot: $e');
+    }
+    return 0;
+  }
+
+  /// Obtener próxima clase de la lista
+  static Map<String, dynamic>? _getProximaClase(
+    List<Map<String, dynamic>> clases,
+    DateTime now,
+  ) {
+    final horaActualMinutos = now.hour * 60 + now.minute;
+
+    for (final clase in clases) {
+      final claseMinutos = _extraerMinutosDeSlot(clase['time'] as String);
+      if (claseMinutos > horaActualMinutos) {
+        return clase;
+      }
+    }
+    return null;
+  }
+
+  /// Obtener datos de horarios (continuación del método anterior)
 
   /// Obtener datos de eventos
   static Map<String, dynamic> _getEventosData(

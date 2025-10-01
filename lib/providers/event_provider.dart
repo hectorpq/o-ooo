@@ -1,5 +1,6 @@
 // lib/providers/event_provider.dart
 import 'dart:async';
+import 'package:agenda_ai/services/widget_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/evento.dart';
@@ -107,6 +108,8 @@ class EventProvider with ChangeNotifier {
           body: 'Se programó recordatorio para "${eventoConUid.titulo}"',
         );
       }
+      //codigo para actualizar el widgetcuando creas evento
+      await WidgetService.updateWidget();
 
       _isLoading = false;
       notifyListeners();
@@ -136,7 +139,7 @@ class EventProvider with ChangeNotifier {
       if (eventoActualizado.notificacionActiva) {
         await _programarNotificacionesEvento(eventoActualizado);
       }
-
+      await WidgetService.updateWidget();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -160,7 +163,7 @@ class EventProvider with ChangeNotifier {
       await _eventsCollection.doc(id).delete();
 
       // El listener en tiempo real se encargará de actualizar la lista local
-
+      await WidgetService.updateWidget();
       _isLoading = false;
       notifyListeners();
     } catch (e) {

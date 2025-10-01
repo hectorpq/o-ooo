@@ -654,14 +654,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                             _buildSettingsCard(
                               icon: Icons.info_rounded,
                               title: 'Acerca de',
-                              subtitle: 'Versión 1.0.0',
+                              subtitle: 'Versión 1.1.9',
                               gradientColors:
                                   themeProvider.iconGradientColors['about']!,
                               onTap: () {
                                 showAboutDialog(
                                   context: context,
                                   applicationName: 'Mi Calendario',
-                                  applicationVersion: '1.0.0',
+                                  applicationVersion: '1.1.9',
                                   applicationIcon: Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(

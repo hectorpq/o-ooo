@@ -1,7 +1,8 @@
-// lib/providers/horario_provider.dart - VERSION CON DEBUG
+// lib/providers/horario_provider.dart - VERSION CON WIDGET SERVICE
 import 'package:flutter/material.dart';
 import '../models/horario.dart';
 import '../services/horario_service.dart';
+import '../services/widget_service.dart';
 
 class HorarioProvider extends ChangeNotifier {
   HorarioCompleto? _horarioActivo;
@@ -152,6 +153,10 @@ class HorarioProvider extends ChangeNotifier {
 
       print('✅ Materia agregada exitosamente');
       await cargarHorarioActivo();
+
+      // Actualizar widget de home screen
+      await WidgetService.updateWidget(horarioProvider: this);
+
       _clearError();
       return true;
     } catch (e, stackTrace) {
@@ -184,6 +189,10 @@ class HorarioProvider extends ChangeNotifier {
 
       print('✅ Materia removida exitosamente');
       await cargarHorarioActivo();
+
+      // Actualizar widget de home screen
+      await WidgetService.updateWidget(horarioProvider: this);
+
       _clearError();
       return true;
     } catch (e, stackTrace) {
@@ -211,6 +220,10 @@ class HorarioProvider extends ChangeNotifier {
       );
 
       await cargarHorarioActivo();
+
+      // Actualizar widget de home screen
+      await WidgetService.updateWidget(horarioProvider: this);
+
       _clearError();
       print('✅ Tipo de horario cambiado exitosamente');
       return true;
