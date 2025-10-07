@@ -21,6 +21,9 @@ dependencies:
   http: ^1.5.0
   share_plus: ^11.1.0
 
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.1.2
+
   flutter_local_notifications: ^17.2.2
   permission_handler: ^11.3.1
   audioplayers: ^6.0.0
@@ -31,9 +34,7 @@ dependencies:
   flutter_colorpicker: ^1.0.3
   intl: ^0.20.2
 
-  # SOLO NECESITAS ESTO PARA EL WIDGET:
   home_widget: ^0.6.0
-  # workmanager: ^0.5.2  # ELIMINADO - causa conflictos
 
 dev_dependencies:
   flutter_test:

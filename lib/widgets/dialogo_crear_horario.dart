@@ -75,7 +75,8 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return AlertDialog(
-          backgroundColor: themeProvider.cardBackgroundColor,
+          backgroundColor: themeProvider
+              .dialogBackgroundColor, // ✅ CAMBIADO: Usa el color del tema
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -91,9 +92,9 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.add_circle_outline,
-                  color: themeProvider.primaryTextColor,
+                  color: Colors.white,
                   size: 20,
                 ),
               ),
@@ -101,7 +102,7 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
               Text(
                 'Crear Nuevo Horario',
                 style: TextStyle(
-                  color: themeProvider.primaryTextColor,
+                  color: themeProvider.dialogTextColor, // ✅ CAMBIADO
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
@@ -116,30 +117,32 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
                 Text(
                   'Nombre del horario:',
                   style: TextStyle(
-                    color: themeProvider.primaryTextColor,
+                    color: themeProvider.dialogTextColor, // ✅ CAMBIADO
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _nombreController,
-                  style: TextStyle(color: themeProvider.primaryTextColor),
+                  style: TextStyle(
+                    color: themeProvider.dialogTextColor,
+                  ), // ✅ CAMBIADO
                   decoration: InputDecoration(
                     hintText: 'Ej: Semestre 2024-1',
                     hintStyle: TextStyle(
-                      color: themeProvider.secondaryTextColor,
-                    ),
+                      color: themeProvider.dialogSecondaryTextColor,
+                    ), // ✅ CAMBIADO
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide(
-                        color: themeProvider.cardBorderColor,
-                      ),
+                        color: themeProvider.dialogBorderColor,
+                      ), // ✅ CAMBIADO
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide(
-                        color: themeProvider.cardBorderColor,
-                      ),
+                        color: themeProvider.dialogBorderColor,
+                      ), // ✅ CAMBIADO
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -156,7 +159,7 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
                 Text(
                   'Tipo de horario:',
                   style: TextStyle(
-                    color: themeProvider.primaryTextColor,
+                    color: themeProvider.dialogTextColor, // ✅ CAMBIADO
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -192,15 +195,17 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
                         decoration: BoxDecoration(
                           color: isSelected
                               ? (themeProvider.isDarkMode
-                                    ? const Color(0xFF495057)
+                                    ? const Color(0xFF6C757D).withOpacity(0.2)
                                     : Colors.purpleAccent.withOpacity(0.2))
-                              : themeProvider.cardBackgroundColor,
+                              : (themeProvider.isDarkMode
+                                    ? const Color(0xFF2C2C2C)
+                                    : Colors.grey.shade50),
                           border: Border.all(
                             color: isSelected
                                 ? (themeProvider.isDarkMode
                                       ? const Color(0xFF6C757D)
                                       : Colors.purpleAccent)
-                                : themeProvider.cardBorderColor,
+                                : themeProvider.dialogBorderColor,
                             width: isSelected ? 2 : 1,
                           ),
                           borderRadius: BorderRadius.circular(10),
@@ -228,14 +233,16 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
                                     nombre,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: themeProvider.primaryTextColor,
+                                      color: themeProvider
+                                          .dialogTextColor, // ✅ CAMBIADO
                                     ),
                                   ),
                                   Text(
                                     descripcion,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: themeProvider.secondaryTextColor,
+                                      color: themeProvider
+                                          .dialogSecondaryTextColor, // ✅ CAMBIADO
                                     ),
                                   ),
                                 ],
@@ -255,7 +262,9 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
               onPressed: _isLoading ? null : () => Navigator.pop(context),
               child: Text(
                 'Cancelar',
-                style: TextStyle(color: themeProvider.secondaryTextColor),
+                style: TextStyle(
+                  color: themeProvider.dialogSecondaryTextColor,
+                ), // ✅ CAMBIADO
               ),
             ),
             ElevatedButton(
@@ -269,20 +278,18 @@ class _DialogoCrearHorarioState extends State<DialogoCrearHorario> {
                 ),
               ),
               child: _isLoading
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          themeProvider.primaryTextColor,
-                        ),
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : Text(
+                  : const Text(
                       'Crear',
                       style: TextStyle(
-                        color: themeProvider.primaryTextColor,
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),

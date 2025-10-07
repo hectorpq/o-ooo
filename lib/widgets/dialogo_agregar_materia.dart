@@ -44,7 +44,6 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
   @override
   void initState() {
     super.initState();
-    // Si ya existe una materia en este slot, cargar sus datos
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final horarioProvider = context.read<HorarioProvider>();
       final materiaExistente = horarioProvider.obtenerMateria(
@@ -61,7 +60,6 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
             ? ''
             : materiaExistente.aula;
 
-        // Obtener el color de la materia existente
         try {
           final colorValue = int.parse(
             materiaExistente.colorHex.replaceFirst('#', ''),
@@ -103,10 +101,8 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
 
     final horarioProvider = context.read<HorarioProvider>();
 
-    // Primero remover la materia existente si existe
     await horarioProvider.removerMateria(dia: widget.dia, hora: widget.hora);
 
-    // Luego agregar la nueva materia
     final success = await horarioProvider.agregarMateria(
       nombre: _nombreController.text.trim(),
       profesor: _profesorController.text.trim().isEmpty
@@ -158,7 +154,6 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
-        // Verificar si ya existe una materia
         final horarioProvider = context.watch<HorarioProvider>();
         final materiaExistente = horarioProvider.obtenerMateria(
           widget.dia,
@@ -167,9 +162,7 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
         final esEdicion = materiaExistente != null;
 
         return AlertDialog(
-          backgroundColor: themeProvider.isDarkMode
-              ? const Color(0xFF2C3E50)
-              : Colors.white,
+          backgroundColor: themeProvider.dialogBackgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
             side: BorderSide(
@@ -224,19 +217,15 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
               ),
             ],
           ),
-          // SOLUCIÓN 1: Contenedor con tamaño fijo
           content: SizedBox(
-            width: 400, // Ancho fijo
+            width: 400,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxHeight: 500, // Alto máximo
-              ),
+              constraints: const BoxConstraints(maxHeight: 500),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Nombre de la materia
                     _buildTextField(
                       label: 'Nombre de la materia:',
                       controller: _nombreController,
@@ -245,8 +234,6 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
                       themeProvider: themeProvider,
                     ),
                     const SizedBox(height: 16),
-
-                    // Profesor
                     _buildTextField(
                       label: 'Profesor (opcional):',
                       controller: _profesorController,
@@ -254,8 +241,6 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
                       themeProvider: themeProvider,
                     ),
                     const SizedBox(height: 16),
-
-                    // Aula
                     _buildTextField(
                       label: 'Aula (opcional):',
                       controller: _aulaController,
@@ -263,12 +248,8 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
                       themeProvider: themeProvider,
                     ),
                     const SizedBox(height: 20),
-
-                    // Selector de color
                     _buildColorSelector(themeProvider),
                     const SizedBox(height: 16),
-
-                    // Vista previa
                     _buildPreview(themeProvider),
                   ],
                 ),
@@ -276,7 +257,6 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
             ),
           ),
           actions: [
-            // Botón eliminar (solo si es edición)
             if (esEdicion)
               TextButton.icon(
                 onPressed: _isLoading
@@ -308,8 +288,6 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
                 label: const Text('Eliminar'),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
               ),
-
-            // Botón cancelar
             TextButton(
               onPressed: _isLoading ? null : () => Navigator.pop(context),
               child: Text(
@@ -317,8 +295,6 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
                 style: TextStyle(color: themeProvider.secondaryTextColor),
               ),
             ),
-
-            // Botón guardar
             ElevatedButton(
               onPressed: _isLoading ? null : _guardarMateria,
               style: ElevatedButton.styleFrom(
@@ -386,7 +362,7 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: themeProvider.isDarkMode
-                ? const Color(0xFF34495E).withOpacity(0.3)
+                ? const Color(0xFF34495E)
                 : Colors.grey.shade50,
             border: Border.all(
               color: themeProvider.isDarkMode
@@ -421,7 +397,7 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
               enabledBorder: InputBorder.none,
             ),
             onChanged: (value) {
-              setState(() {}); // Para actualizar la vista previa
+              setState(() {});
             },
           ),
         ),
@@ -450,7 +426,7 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: themeProvider.isDarkMode
-                ? const Color(0xFF34495E).withOpacity(0.2)
+                ? const Color(0xFF34495E)
                 : Colors.grey.shade50,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
@@ -554,7 +530,7 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
                   color: _colorSeleccionado,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.visibility_rounded,
                   size: 16,
                   color: Colors.white,
@@ -579,8 +555,8 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: themeProvider.isDarkMode
-                  ? const Color(0xFF2C3E50).withOpacity(0.8)
-                  : Colors.white.withOpacity(0.9),
+                  ? const Color(0xFF2C3E50)
+                  : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: _colorSeleccionado.withOpacity(0.3),
@@ -686,13 +662,13 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
       builder: (context) => Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return AlertDialog(
-            backgroundColor: themeProvider.cardBackgroundColor,
+            backgroundColor: themeProvider.dialogBackgroundColor,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(15),
             ),
             title: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.warning_amber_rounded,
                   color: Colors.orange,
                   size: 24,
@@ -708,8 +684,7 @@ class _DialogoAgregarMateriaState extends State<DialogoAgregarMateria> {
               ],
             ),
             content: SizedBox(
-              width:
-                  300, // SOLUCIÓN 2: También fijar el ancho del diálogo de confirmación
+              width: 300,
               child: Text(
                 '¿Estás seguro de que quieres eliminar "${_nombreController.text}"?\n\nEsta acción no se puede deshacer.',
                 style: TextStyle(color: themeProvider.secondaryTextColor),

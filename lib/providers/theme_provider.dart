@@ -118,12 +118,30 @@ class ThemeProvider extends ChangeNotifier {
     }
   }
 
+  // ✅ NUEVO: Color del fondo de diálogos según el tema
+  Color get dialogBackgroundColor {
+    if (_isDarkMode) {
+      return const Color(0xFF1E1E1E); // Negro sólido para modo oscuro
+    } else {
+      return Colors.white; // Blanco sólido para modo claro
+    }
+  }
+
   // Color del borde para los cards
   Color get cardBorderColor {
     if (_isDarkMode) {
       return Colors.grey.shade600.withOpacity(0.3);
     } else {
       return Colors.white.withOpacity(0.2);
+    }
+  }
+
+  // ✅ NUEVO: Color del borde para diálogos
+  Color get dialogBorderColor {
+    if (_isDarkMode) {
+      return Colors.grey.shade700;
+    } else {
+      return Colors.grey.shade300;
     }
   }
 
@@ -138,6 +156,24 @@ class ThemeProvider extends ChangeNotifier {
       return Colors.grey.shade300;
     } else {
       return Colors.white.withOpacity(0.8);
+    }
+  }
+
+  // ✅ NUEVO: Color de texto principal para diálogos
+  Color get dialogTextColor {
+    if (_isDarkMode) {
+      return Colors.white; // Blanco para modo oscuro
+    } else {
+      return Colors.black87; // Negro para modo claro
+    }
+  }
+
+  // ✅ NUEVO: Color de texto secundario para diálogos
+  Color get dialogSecondaryTextColor {
+    if (_isDarkMode) {
+      return Colors.grey.shade400; // Gris claro para modo oscuro
+    } else {
+      return Colors.grey.shade600; // Gris oscuro para modo claro
     }
   }
 

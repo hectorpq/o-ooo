@@ -1,8 +1,9 @@
-// lib/providers/horario_provider.dart - VERSION CON WIDGET SERVICE
+// lib/providers/horario_provider.dart - OPTIMIZADO
 import 'package:flutter/material.dart';
 import '../models/horario.dart';
 import '../services/horario_service.dart';
 import '../services/widget_service.dart';
+import '../services/share_service.dart';
 
 class HorarioProvider extends ChangeNotifier {
   HorarioCompleto? _horarioActivo;
@@ -15,8 +16,6 @@ class HorarioProvider extends ChangeNotifier {
   List<HorarioCompleto> get todosLosHorarios => _todosLosHorarios;
   bool get isLoading => _isLoading;
   String? get error => _error;
-
-  // Verificar si hay un horario activo
   bool get tieneHorarioActivo => _horarioActivo != null;
 
   /// Inicializar el provider cargando el horario activo
@@ -68,7 +67,7 @@ class HorarioProvider extends ChangeNotifier {
       print('❌ Error al cargar horario activo: $e');
       print('📍 Stack trace: $stackTrace');
       _setError('Error al cargar horario activo: $e');
-      rethrow; // Re-lanzar para que se capture en inicializar()
+      rethrow;
     }
   }
 
@@ -83,7 +82,6 @@ class HorarioProvider extends ChangeNotifier {
       print('❌ Error al cargar horarios: $e');
       print('📍 Stack trace: $stackTrace');
       _setError('Error al cargar horarios: $e');
-      // No re-lanzar aquí porque no es crítico si falla la carga de todos los horarios
     }
   }
 
@@ -104,7 +102,6 @@ class HorarioProvider extends ChangeNotifier {
       print('✅ Horario creado con ID: $horarioId');
 
       await cargarHorarioActivo();
-      await cargarTodosLosHorarios();
       _clearError();
       return true;
     } catch (e, stackTrace) {
@@ -153,8 +150,6 @@ class HorarioProvider extends ChangeNotifier {
 
       print('✅ Materia agregada exitosamente');
       await cargarHorarioActivo();
-
-      // Actualizar widget de home screen
       await WidgetService.updateWidget(horarioProvider: this);
 
       _clearError();
@@ -189,8 +184,6 @@ class HorarioProvider extends ChangeNotifier {
 
       print('✅ Materia removida exitosamente');
       await cargarHorarioActivo();
-
-      // Actualizar widget de home screen
       await WidgetService.updateWidget(horarioProvider: this);
 
       _clearError();
@@ -220,8 +213,6 @@ class HorarioProvider extends ChangeNotifier {
       );
 
       await cargarHorarioActivo();
-
-      // Actualizar widget de home screen
       await WidgetService.updateWidget(horarioProvider: this);
 
       _clearError();
@@ -260,15 +251,21 @@ class HorarioProvider extends ChangeNotifier {
     }
   }
 
-  /// Activar un horario específico
+  /// Activar un horario específico (OPTIMIZADO)
   Future<bool> activarHorario(String horarioId) async {
-    print('🔄 Activando horario: $horarioId');
+    print('🔄 INICIO - Activando horario: $horarioId');
     _setLoading(true);
 
     try {
+      print('📡 Llamando a Firebase para activar...');
       await HorarioService.activarHorario(horarioId);
+
+      print('📡 Recargando horario activo...');
       await cargarHorarioActivo();
-      await cargarTodosLosHorarios();
+
+      // OPTIMIZACIÓN: Solo actualizar la lista si es necesario
+      // No recargamos todos los horarios porque solo cambió el flag "activo"
+
       _clearError();
       print('✅ Horario activado exitosamente');
       return true;
@@ -278,6 +275,7 @@ class HorarioProvider extends ChangeNotifier {
       _setError('Error al activar horario: $e');
       return false;
     } finally {
+      print('🏁 FIN - Proceso completado');
       _setLoading(false);
     }
   }
@@ -289,7 +287,6 @@ class HorarioProvider extends ChangeNotifier {
     try {
       await HorarioService.eliminarHorario(horarioId);
 
-      // Si era el horario activo, limpiarlo
       if (_horarioActivo?.id == horarioId) {
         _horarioActivo = null;
         print('🔄 Horario activo limpiado porque fue eliminado');
@@ -307,7 +304,7 @@ class HorarioProvider extends ChangeNotifier {
     }
   }
 
-  /// Duplicar un horario
+  /// Duplicar un horario (OPTIMIZADO)
   Future<bool> duplicarHorario({
     required String horarioId,
     required String nuevoNombre,
@@ -321,8 +318,8 @@ class HorarioProvider extends ChangeNotifier {
         nuevoNombre: nuevoNombre,
       );
 
+      // Solo recargar el activo ya que se activa automáticamente
       await cargarHorarioActivo();
-      await cargarTodosLosHorarios();
       _clearError();
       print('✅ Horario duplicado exitosamente');
       return true;
@@ -335,6 +332,150 @@ class HorarioProvider extends ChangeNotifier {
       _setLoading(false);
     }
   }
+
+  // ==================== FUNCIONES DE COMPARTIR ====================
+
+  /// Compartir horario por link (retorna shareId)
+  Future<String?> compartirHorarioPorLink() async {
+    if (_horarioActivo == null) {
+      _setError('No hay horario activo para compartir');
+      return null;
+    }
+
+    print('📤 Compartiendo horario por link: ${_horarioActivo!.nombre}');
+    _setLoading(true);
+
+    try {
+      await ShareService.compartirHorarioPorLink(_horarioActivo!);
+      _clearError();
+      print('✅ Horario compartido por link');
+
+      final shareId = await ShareService.compartirHorario(_horarioActivo!);
+      return shareId;
+    } catch (e, stackTrace) {
+      print('❌ Error al compartir horario: $e');
+      print('📍 Stack trace: $stackTrace');
+      _setError('Error al compartir horario: $e');
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Generar QR del horario activo (retorna string JSON para QR)
+  Future<String?> generarQRHorario() async {
+    if (_horarioActivo == null) {
+      _setError('No hay horario activo para compartir');
+      return null;
+    }
+
+    print('📤 Generando QR del horario: ${_horarioActivo!.nombre}');
+    _setLoading(true);
+
+    try {
+      final shareId = await ShareService.compartirHorario(_horarioActivo!);
+      final qrData = ShareService.generarQRHorario(shareId);
+
+      _clearError();
+      print('✅ QR generado para horario: $shareId');
+      return qrData;
+    } catch (e, stackTrace) {
+      print('❌ Error al generar QR: $e');
+      print('📍 Stack trace: $stackTrace');
+      _setError('Error al generar QR: $e');
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Procesar QR escaneado
+  Future<Map<String, dynamic>?> procesarQREscaneado(String qrData) async {
+    print('📥 Procesando QR escaneado...');
+
+    try {
+      final datos = ShareService.procesarQRData(qrData);
+
+      if (datos == null) {
+        _setError('QR no válido o no pertenece a Agenda AI');
+        return null;
+      }
+
+      print('✅ QR procesado: ${datos['tipo']} - ${datos['shareId']}');
+      return datos;
+    } catch (e, stackTrace) {
+      print('❌ Error al procesar QR: $e');
+      print('📍 Stack trace: $stackTrace');
+      _setError('Error al procesar QR: $e');
+      return null;
+    }
+  }
+
+  /// Importar horario desde shareId con opciones
+  Future<bool> importarHorario({
+    required String shareId,
+    required OpcionImportar opcion,
+    String? nombrePersonalizado,
+  }) async {
+    print('📥 Importando horario con opción: $opcion');
+    _setLoading(true);
+
+    try {
+      String? horarioIdASobrescribir;
+
+      if (opcion == OpcionImportar.sobrescribir && _horarioActivo != null) {
+        horarioIdASobrescribir = _horarioActivo!.id;
+      }
+
+      final horarioId = await ShareService.importarHorario(
+        shareId: shareId,
+        opcion: opcion,
+        nombrePersonalizado: nombrePersonalizado,
+        horarioIdASobrescribir: horarioIdASobrescribir,
+      );
+
+      print('✅ Horario importado: $horarioId');
+
+      await cargarHorarioActivo();
+      _clearError();
+      return true;
+    } catch (e, stackTrace) {
+      print('❌ Error al importar horario: $e');
+      print('📍 Stack trace: $stackTrace');
+      _setError('Error al importar horario: $e');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Obtener vista previa del horario compartido
+  Future<HorarioCompleto?> obtenerVistaPrevia(String shareId) async {
+    print('👁️ Obteniendo vista previa del horario: $shareId');
+    _setLoading(true);
+
+    try {
+      final horario = await ShareService.obtenerHorarioCompartido(shareId);
+
+      if (horario == null) {
+        _setError('No se pudo cargar el horario compartido');
+        return null;
+      }
+
+      print('✅ Vista previa obtenida: ${horario.nombre}');
+      _clearError();
+      return horario;
+    } catch (e, stackTrace) {
+      print('❌ Error al obtener vista previa: $e');
+      print('📍 Stack trace: $stackTrace');
+      _setError('Error al obtener vista previa: $e');
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // ==================== MÉTODOS AUXILIARES ====================
 
   /// Obtener materia para un slot específico
   Materia? obtenerMateria(String dia, String hora) {
@@ -369,7 +510,7 @@ class HorarioProvider extends ChangeNotifier {
       return Color(colorValue);
     } catch (e) {
       print('⚠️ Error al parsear color ${materia.colorHex}: $e');
-      return Colors.blue; // Color por defecto
+      return Colors.blue;
     }
   }
 
