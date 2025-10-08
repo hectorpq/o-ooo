@@ -10,6 +10,7 @@ import '../providers/horario_provider.dart';
 import '../widgets/dialogo_crear_horario.dart';
 import '../widgets/dialogo_agregar_materia.dart';
 import '../services/widget_service.dart';
+import '../services/horario_service.dart';
 import 'qr_display_screen.dart';
 import 'qr_scanner_screen.dart';
 import '../services/share_service.dart';
@@ -157,10 +158,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: themeProvider.isDarkMode
-          ? Colors
-                .black // Negro sólido 100% para modo oscuro
-          : Colors.white, // Blanco sólido 100% para modo claro
+      barrierColor: themeProvider.isDarkMode ? Colors.black : Colors.white,
       builder: (context) => WillPopScope(
         onWillPop: () async => false,
         child: Center(
@@ -169,8 +167,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.all(40),
             decoration: BoxDecoration(
               color: themeProvider.isDarkMode
-                  ? const Color(0xFF1a1a1a) // Negro oscuro para el card
-                  : Colors.white, // Blanco para el card
+                  ? const Color(0xFF1a1a1a)
+                  : Colors.white,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
@@ -365,22 +363,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     try {
       await horarioProvider.compartirHorarioPorLink();
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Horario compartido exitosamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+      await horarioProvider.cargarHorarioActivo();
+      _actualizarWidget();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Horario compartido exitosamente'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al compartir: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -389,37 +397,51 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     try {
       final qrData = await horarioProvider.generarQRHorario();
+
+      if (qrData == null) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error al generar código QR'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
       final linkId = await ShareService.compartirHorario(
         horarioProvider.horarioActivo!,
       );
       final link = ShareService.generarLinkHorario(linkId);
 
-      if (mounted) {
-        Navigator.pop(context);
-        if (qrData != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => QRDisplayScreen(
-                qrData: qrData,
-                titulo: horarioProvider.horarioActivo!.nombre,
-                subtitulo: 'Escanea este código para importar el horario',
-                link: link,
-              ),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al generar QR: $e'),
-            backgroundColor: Colors.red,
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => QRDisplayScreen(
+            qrData: qrData,
+            titulo: horarioProvider.horarioActivo!.nombre,
+            subtitulo: 'Escanea este código para importar el horario',
+            link: link,
           ),
-        );
-      }
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al generar QR: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -430,6 +452,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  // ✅ ============ MÉTODO CORREGIDO ============
   void _mostrarSelectorHorarios(HorarioProvider horarioProvider) async {
     await horarioProvider.cargarTodosLosHorarios();
 
@@ -446,8 +469,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               maxHeight: MediaQuery.of(context).size.height * 0.75,
             ),
             decoration: BoxDecoration(
-              color: themeProvider
-                  .dialogBackgroundColor, // ✅ CAMBIADO: Ahora usa dialogBackgroundColor
+              color: themeProvider.dialogBackgroundColor,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(25),
               ),
@@ -469,7 +491,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   decoration: BoxDecoration(
                     color: themeProvider.dialogSecondaryTextColor.withOpacity(
                       0.3,
-                    ), // ✅ CAMBIADO
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
@@ -491,8 +513,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            color: themeProvider
-                                .dialogTextColor, // ✅ CAMBIADO: Usa dialogTextColor
+                            color: themeProvider.dialogTextColor,
                           ),
                         ),
                       ),
@@ -532,16 +553,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 Icon(
                                   Icons.schedule_outlined,
                                   size: 64,
-                                  color: themeProvider
-                                      .dialogSecondaryTextColor, // ✅ CAMBIADO
+                                  color: themeProvider.dialogSecondaryTextColor,
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
                                   'No tienes horarios creados',
                                   style: TextStyle(
                                     fontSize: 16,
-                                    color: themeProvider
-                                        .dialogTextColor, // ✅ CAMBIADO
+                                    color: themeProvider.dialogTextColor,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -549,8 +568,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   'Toca el botón + para crear uno',
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: themeProvider
-                                        .dialogSecondaryTextColor, // ✅ CAMBIADO
+                                    color:
+                                        themeProvider.dialogSecondaryTextColor,
                                   ),
                                 ),
                               ],
@@ -606,17 +625,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     ? null
                                     : (themeProvider.isDarkMode
                                           ? const Color(0xFF2C2C2C)
-                                          : Colors
-                                                .grey
-                                                .shade50), // ✅ CAMBIADO: Fondo para cards inactivos
+                                          : Colors.grey.shade50),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: isActive
                                       ? (themeProvider.isDarkMode
                                             ? const Color(0xFF6C757D)
                                             : Colors.deepPurple)
-                                      : themeProvider
-                                            .dialogBorderColor, // ✅ CAMBIADO
+                                      : themeProvider.dialogBorderColor,
                                   width: isActive ? 2 : 1,
                                 ),
                                 boxShadow: isActive
@@ -637,37 +653,165 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 color: Colors.transparent,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(16),
+                                  // ✅ ============ AQUÍ ESTÁ LA CORRECCIÓN PRINCIPAL ============
                                   onTap: isActive
                                       ? null
                                       : () async {
+                                          // 1️⃣ Guardar referencias ANTES de async
+                                          final horarioSeleccionado = horario;
+                                          final navegador = Navigator.of(
+                                            context,
+                                          );
+                                          final messenger =
+                                              ScaffoldMessenger.of(context);
+
+                                          // 2️⃣ Cerrar el bottom sheet
                                           Navigator.pop(context);
-                                          _mostrarDialogoCarga(
-                                            'Cambiando horario...',
+
+                                          // 3️⃣ Esperar a que se cierre completamente
+                                          await Future.delayed(
+                                            const Duration(milliseconds: 200),
                                           );
 
-                                          final success = await horarioProvider
-                                              .activarHorario(horario.id);
+                                          if (!mounted) return;
 
-                                          if (mounted) {
-                                            Navigator.pop(context);
+                                          // 4️⃣ Mostrar diálogo de carga
+                                          showDialog(
+                                            context: context,
+                                            barrierDismissible: false,
+                                            builder: (dialogContext) => WillPopScope(
+                                              onWillPop: () async => false,
+                                              child: Center(
+                                                child: Container(
+                                                  margin: const EdgeInsets.all(
+                                                    40,
+                                                  ),
+                                                  padding: const EdgeInsets.all(
+                                                    40,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        themeProvider.isDarkMode
+                                                        ? const Color(
+                                                            0xFF1a1a1a,
+                                                          )
+                                                        : Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          20,
+                                                        ),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color:
+                                                            themeProvider
+                                                                .isDarkMode
+                                                            ? Colors.black
+                                                                  .withOpacity(
+                                                                    0.5,
+                                                                  )
+                                                            : Colors.grey
+                                                                  .withOpacity(
+                                                                    0.3,
+                                                                  ),
+                                                        blurRadius: 20,
+                                                        spreadRadius: 5,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      SizedBox(
+                                                        width: 50,
+                                                        height: 50,
+                                                        child: CircularProgressIndicator(
+                                                          strokeWidth: 4,
+                                                          valueColor:
+                                                              AlwaysStoppedAnimation<
+                                                                Color
+                                                              >(
+                                                                themeProvider
+                                                                        .isDarkMode
+                                                                    ? Colors
+                                                                          .white
+                                                                    : Colors
+                                                                          .deepPurple,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 24,
+                                                      ),
+                                                      Text(
+                                                        'Cambiando a\n${horarioSeleccionado.nombre}...',
+                                                        style: TextStyle(
+                                                          fontSize: 18,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color:
+                                                              themeProvider
+                                                                  .isDarkMode
+                                                              ? Colors.white
+                                                              : Colors.black87,
+                                                        ),
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+
+                                          try {
+                                            // 5️⃣ Cambiar el horario en Firebase
+                                            await HorarioService.activarHorario(
+                                              horarioSeleccionado.id,
+                                            );
+
+                                            // 6️⃣ Recargar el horario activo
+                                            await horarioProvider
+                                                .cargarHorarioActivo();
+
+                                            if (!mounted) return;
+
+                                            // 7️⃣ ✅ CERRAR EL DIÁLOGO
+                                            navegador.pop();
+
+                                            // 8️⃣ Actualizar el widget nativo
                                             _actualizarWidget();
 
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
+                                            // 9️⃣ Mostrar éxito
+                                            messenger.showSnackBar(
                                               SnackBar(
                                                 content: Text(
-                                                  success
-                                                      ? 'Horario "${horario.nombre}" activado'
-                                                      : 'Error al activar horario',
+                                                  'Horario "${horarioSeleccionado.nombre}" activado',
                                                 ),
-                                                backgroundColor: success
-                                                    ? Colors.green
-                                                    : Colors.red,
+                                                backgroundColor: Colors.green,
+                                                duration: const Duration(
+                                                  seconds: 2,
+                                                ),
+                                              ),
+                                            );
+                                          } catch (e) {
+                                            if (!mounted) return;
+
+                                            // 🔟 ✅ CERRAR EL DIÁLOGO en caso de error
+                                            navegador.pop();
+
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Error al cambiar horario: $e',
+                                                ),
+                                                backgroundColor: Colors.red,
                                               ),
                                             );
                                           }
                                         },
+                                  // ✅ ============ FIN DE LA CORRECCIÓN ============
                                   child: Padding(
                                     padding: const EdgeInsets.all(16),
                                     child: Column(
@@ -719,7 +863,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                       fontWeight:
                                                           FontWeight.bold,
                                                       color: themeProvider
-                                                          .dialogTextColor, // ✅ CAMBIADO
+                                                          .dialogTextColor,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 4),
@@ -728,7 +872,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                     style: TextStyle(
                                                       fontSize: 13,
                                                       color: themeProvider
-                                                          .dialogSecondaryTextColor, // ✅ CAMBIADO
+                                                          .dialogSecondaryTextColor,
                                                     ),
                                                   ),
                                                 ],
@@ -777,7 +921,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: themeProvider
-                                                .dialogSecondaryTextColor, // ✅ CAMBIADO
+                                                .dialogSecondaryTextColor,
                                           ),
                                         ),
                                       ],
@@ -880,7 +1024,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             borderRadius: BorderRadius.circular(25),
                           ),
                         ),
-                        child: Text(
+                        child: const Text(
                           'Crear Horario',
                           style: TextStyle(
                             color: Colors.white,
@@ -998,7 +1142,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                       ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Icon(
+                                    child: const Icon(
                                       Icons.schedule_rounded,
                                       color: Colors.white,
                                       size: 20,
